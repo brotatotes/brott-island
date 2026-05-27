@@ -232,8 +232,8 @@ export function run(world: World, config: SimConfig, rng: Rng, ticks: number): v
 export const TIDAL_GENERATOR_COST = 50;
 
 // Canvas is 640x400 at TILE=16 → 40x25 tile world. Shore at x=24.
-// Generator slots: columns at x=28 and x=34 (in water), y rows spaced 6 apart
-// within visible bounds [y=2..23]. First slot matches the seeded generator.
+// Generator slots: three water columns (x=27, 32, 37) × five rows (y=4..22),
+// 15 total. First slot matches the seeded generator's spot (x=27,y=13 → first slot reused).
 const GENERATOR_SLOTS: { x: number; y: number }[] = [
   { x: 28, y: 14 },
   { x: 28, y: 8 },
@@ -242,6 +242,13 @@ const GENERATOR_SLOTS: { x: number; y: number }[] = [
   { x: 34, y: 17 },
   { x: 34, y: 5 },
   { x: 34, y: 23 },
+  { x: 31, y: 6 },
+  { x: 31, y: 11 },
+  { x: 31, y: 16 },
+  { x: 31, y: 21 },
+  { x: 37, y: 8 },
+  { x: 37, y: 14 },
+  { x: 37, y: 20 },
 ];
 
 /**
@@ -282,7 +289,7 @@ export const MAX_TIDAL_GENERATORS = GENERATOR_SLOTS.length;
 // --- Brott building ---
 
 export const BROTT_COST = 100;
-export const MAX_BROTTS = 4;
+export const MAX_BROTTS = 10;
 
 /**
  * Attempt to build a new brott. Returns the new brott id on success, null on failure.
