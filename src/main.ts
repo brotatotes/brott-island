@@ -2,6 +2,7 @@
 
 import { createWorld, tick } from './sim/world';
 import { render, hudText } from './render/scene';
+import { initDashboard } from './render/dashboard';
 
 const canvas = document.getElementById('stage') as HTMLCanvasElement;
 const hud = document.getElementById('hud') as HTMLDivElement;
@@ -9,6 +10,7 @@ const ctx = canvas.getContext('2d')!;
 
 const seed = Math.floor(Math.random() * 1e9);
 const { world, rng, config } = createWorld({ seed });
+const dashboard = initDashboard(world);
 
 const mouse = { x: 0, y: 0, inside: false };
 canvas.addEventListener('mousemove', e => {
@@ -27,6 +29,7 @@ function frame(): void {
   for (let i = 0; i < TICKS_PER_FRAME; i++) tick(world, config, rng);
   render(ctx, world, mouse);
   hud.textContent = hudText(world) + `\nseed    ${seed}`;
+  dashboard.update();
   requestAnimationFrame(frame);
 }
 
