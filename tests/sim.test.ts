@@ -255,4 +255,79 @@ describe('sim core', () => {
     expect(b1.energy).toBeGreaterThan(0);
     expect(b2.energy).toBeGreaterThan(0);
   });
+
+  it('auto-build disabled (default) never builds even with plenty of salvage', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    // Pre-fund the world with salvage; default config has autoBuild.enabled=false.
+    world.inventory.salvage = 100000;
+    const startBrotts = world.brotts.length;
+    const startGens = world.structures.filter(s => s.kind === 'tidal_generator').length;
+    run(world, config, rng, 50_000);
+    expect(world.brotts.length).toBe(startBrotts);
+    expect(world.structures.filter(s => s.kind === 'tidal_generator').length).toBe(startGens);
+    // Salvage spent only by collection rewards (none), should be exactly preserved minus zero spend.
+    expect(world.inventory.salvage).toBeGreaterThanOrEqual(100000);
+  });
+
+  it('auto-build enabled actually builds across 50k ticks', () => {
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } },
+    });
+    world.inventory.salvage = 100000;
+    run(world, config, rng, 50_000);
+    const gens = world.structures.filter(s => s.kind === 'tidal_generator').length;
+    expect(world.brotts.length > 1 || gens > 1).toBe(true);
+  });
+
+  it('auto-build respects cooldown', () => {
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 1.0, buildCooldownTicks: 200 } },
+    });
+    world.inventory.salvage = 100000;
+    let prevCount = world.brotts.length + world.structures.filter(s => s.kind === 'tidal_generator').length;
+    let prevTick = 0;
+    for (let i = 0; i < 5000; i++) {
+      tick(world, config, rng);
+      const count = world.brotts.length + world.structures.filter(s => s.kind === 'tidal_generator').length;
+      if (count > prevCount) {
+        if (prevTick > 0) {
+          expect(world.tick - prevTick).toBeGreaterThanOrEqual(200);
+        }
+        prevTick = world.tick;
+        prevCount = count;
+      }
+    }
+  });
+
+  it('auto-build is deterministic given seed', () => {
+    const a = createWorld({
+      seed: 42,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } },
+    });
+    const b = createWorld({
+      seed: 42,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } },
+    });
+    a.world.inventory.salvage = 100000;
+    b.world.inventory.salvage = 100000;
+    run(a.world, a.config, a.rng, 20_000);
+    run(b.world, b.config, b.rng, 20_000);
+    expect(a.world.brotts.length).toBe(b.world.brotts.length);
+    expect(a.world.structures.length).toBe(b.world.structures.length);
+    expect(a.world.metrics).toEqual(b.world.metrics);
+    expect(a.world.lastBuildTick).toBe(b.world.lastBuildTick);
+  });
+
+  it('auto-build with high brottPerGenTarget prefers brotts', () => {
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 4.0, maxIdleRatio: 1.0, buildCooldownTicks: 100 } },
+    });
+    world.inventory.salvage = 100000;
+    run(world, config, rng, 30_000);
+    // Should have built up to MAX_BROTTS before adding more generators.
+    expect(world.brotts.length).toBe(MAX_BROTTS);
+  });
 });

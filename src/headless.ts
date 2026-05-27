@@ -12,20 +12,26 @@ interface Args {
   json: boolean;
 }
 
-function parseArgs(argv: string[]): Args {
-  const out: Args = { seed: 1, ticks: 10_000, json: false };
+interface Args2 extends Args { autoBuild: boolean; }
+
+function parseArgs(argv: string[]): Args2 {
+  const out: Args2 = { seed: 1, ticks: 10_000, json: false, autoBuild: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--seed') out.seed = parseInt(argv[++i], 10);
     else if (a === '--ticks') out.ticks = parseInt(argv[++i], 10);
     else if (a === '--json') out.json = true;
+    else if (a === '--auto-build') out.autoBuild = true;
   }
   return out;
 }
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
-  const { world, rng, config } = createWorld({ seed: args.seed });
+  const configOverride = args.autoBuild
+    ? { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } }
+    : undefined;
+  const { world, rng, config } = createWorld({ seed: args.seed, config: configOverride });
   const t0 = Date.now();
   run(world, config, rng, args.ticks);
   const elapsedMs = Date.now() - t0;
@@ -62,6 +68,8 @@ function main(): void {
     console.log(`  final energy:  ${(f.brottEnergy * 100).toFixed(1)}%`);
     console.log(`  salvage:       ${f.salvage}`);
     console.log(`  debris on map: ${f.debrisRemaining}`);
+    console.log(`  brotts: ${world.brotts.length}, generators: ${world.structures.filter(s => s.kind === 'tidal_generator').length}`);
+    if (args.autoBuild) console.log(`  auto-build: ON`);
   }
 }
 

@@ -59,6 +59,16 @@ export interface World {
     debrisCollected: number;
     ticksAtFullOutput: number;
   };
+  // Auto-build bookkeeping (deterministic; populated even when policy disabled)
+  lastBuildTick: number;
+  brottIdleHistory: number[];  // ring buffer, 0/1 per tick — "was any brott idle this tick"
+}
+
+export interface AutoBuildPolicy {
+  enabled: boolean;             // default false
+  brottPerGenTarget: number;    // default 1.0
+  maxIdleRatio: number;         // default 0.5
+  buildCooldownTicks: number;   // default 200
 }
 
 export interface SimConfig {
@@ -73,6 +83,7 @@ export interface SimConfig {
   lowEnergyThreshold: number;     // brott returns to charge below this
   highFoulingThreshold: number;   // brott prioritizes cleaning above this
   batteryCapacity: number;        // max kWh stored locally; overflow goes to delivered
+  autoBuild?: AutoBuildPolicy;    // optional automatic salvage spend (off by default)
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -86,4 +97,10 @@ export const DEFAULT_CONFIG: SimConfig = {
   debrisSpawnChance: 0.004,
   lowEnergyThreshold: 0.25,
   highFoulingThreshold: 0.5,
+  autoBuild: {
+    enabled: false,
+    brottPerGenTarget: 1.0,
+    maxIdleRatio: 0.5,
+    buildCooldownTicks: 200,
+  },
 };

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "baseline",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+  },
+  {
+    "name": "more-brotts",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.5, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+  },
+  {
+    "name": "fewer-brotts",
+    "policy": { "enabled": true, "brottPerGenTarget": 0.5, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+  },
+  {
+    "name": "tight-utilization",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.3, "buildCooldownTicks": 200 }
+  },
+  {
+    "name": "loose-utilization",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.7, "buildCooldownTicks": 200 }
+  },
+  {
+    "name": "fast-cooldown",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 50 }
+  }
+]

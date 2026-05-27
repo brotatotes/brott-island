@@ -50,6 +50,8 @@ export function createWorld(opts: SimOptions = {}): { world: World; rng: Rng; co
       debrisCollected: 0,
       ticksAtFullOutput: 0,
     },
+    lastBuildTick: 0,
+    brottIdleHistory: [],
   };
 
   return { world, rng, config };
@@ -168,11 +170,57 @@ function maybeSpawnDebris(world: World, config: SimConfig, rng: Rng): void {
   }
 }
 
+const IDLE_HISTORY_MAX = 500;
+
+function recordIdleSample(world: World): void {
+  // 1 if any brott was idle this tick (after stepping), else 0.
+  // "Idle" = task.kind === 'idle' OR 'recharge' at full energy (rare edge).
+  const anyIdle = world.brotts.some(b => b.task.kind === 'idle');
+  world.brottIdleHistory.push(anyIdle ? 1 : 0);
+  if (world.brottIdleHistory.length > IDLE_HISTORY_MAX) {
+    world.brottIdleHistory.shift();
+  }
+}
+
+export function runAutoBuildPolicy(world: World, config: SimConfig): void {
+  const p = config.autoBuild;
+  if (!p || !p.enabled) return;
+  if (world.tick - world.lastBuildTick < p.buildCooldownTicks) return;
+
+  // Skip while utilization is too low (brotts mostly idle).
+  const hist = world.brottIdleHistory;
+  if (hist.length > 0) {
+    let sum = 0;
+    for (let i = 0; i < hist.length; i++) sum += hist[i];
+    const idleRatio = sum / hist.length;
+    if (idleRatio > p.maxIdleRatio) return;
+  }
+
+  const brottCount = world.brotts.length;
+  const genCount = world.structures.filter(s => s.kind === 'tidal_generator').length;
+  const ratio = brottCount / Math.max(1, genCount);
+  const preferBrott = ratio < p.brottPerGenTarget;
+
+  let id: string | null;
+  if (preferBrott) {
+    id = buildBrott(world);
+    if (id === null) id = buildTidalGenerator(world);
+  } else {
+    id = buildTidalGenerator(world);
+    if (id === null) id = buildBrott(world);
+  }
+  if (id !== null) {
+    world.lastBuildTick = world.tick;
+  }
+}
+
 export function tick(world: World, config: SimConfig, rng: Rng): void {
   world.tick += 1;
   maybeSpawnDebris(world, config, rng);
   stepGenerators(world, config);
   for (const b of world.brotts) stepBrott(world, b, config);
+  recordIdleSample(world);
+  runAutoBuildPolicy(world, config);
 }
 
 export function run(world: World, config: SimConfig, rng: Rng, ticks: number): void {

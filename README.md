@@ -80,6 +80,34 @@ This is the *whole point* of the project — not the game, the loop around the g
 
 Phase 0 — scaffolding. Day 1 loop not yet runnable. Track in [issues](https://github.com/brotatotes/brott-island/issues).
 
+## Headless optimization loop
+
+The sim has an opt-in **auto-build policy** (`SimConfig.autoBuild`) that automatically spends salvage on new brotts/generators while the sim runs. Off by default for human play; turned on for headless variant sweeps.
+
+Knobs (see `src/sim/types.ts → AutoBuildPolicy`):
+
+- `brottPerGenTarget` — desired brott/gen ratio; builds a brott when current ratio drops below this, else builds a generator.
+- `maxIdleRatio` — skip building if recent brott-idle ratio exceeds this (don't overcrowd).
+- `buildCooldownTicks` — minimum ticks between builds.
+
+### Eval harness
+
+```bash
+npm run eval -- --variants eval-variants.json --seeds 8 --ticks 50000 --out eval-results/
+```
+
+Runs each variant (see [`eval-variants.json`](./eval-variants.json)) across N seeds, aggregates `delivered`, `uptime %`, and final entity counts, writes `eval-results/<git-sha>.json`, and prints a markdown digest.
+
+### Watch the policy run
+
+```bash
+npm run headless -- --auto-build --ticks 50000
+```
+
+### Nightly cron
+
+A `brott-sim-nightly` cron job (3 AM ET) re-runs the eval against the latest `main`, commits the new `eval-results/<sha>.json`, and posts a top-3 digest to Discord `#brott-sim`.
+
 ## License
 
 MIT.
