@@ -5,6 +5,8 @@ export type Vec2 = { x: number; y: number };
 
 export type Capability = 'clean' | 'recharge' | 'collect';
 
+export type Job = 'auto' | 'clean' | 'collect' | 'recharge_only';
+
 export type BrottTaskKind = 'idle' | 'walk' | 'clean' | 'recharge' | 'collect';
 
 export interface BrottTask {
@@ -21,6 +23,7 @@ export interface Brott {
   energy: number;        // 0..1
   capabilities: Capability[];
   task: BrottTask;
+  job: Job;
 }
 
 export type StructureKind = 'tidal_generator' | 'charger' | 'intake';

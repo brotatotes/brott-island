@@ -20,7 +20,7 @@ Web stack, deployed to GitHub Pages. Headless sim mode from day 1 so an agent ca
 
 ## Day 1 scope
 
-One Brott. One tidal generator. Three verbs:
+Multiple Brotts (up to 4) operating one or more tidal generators, with per-Brott job assignment. Three verbs:
 
 1. **Clean** — generator accumulates fouling over time, output drops
 2. **Recharge** — Brott energy depletes with activity, return to charger

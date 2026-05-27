@@ -26,31 +26,67 @@ function structuresOfKind(world: World, kind: Structure['kind']): Structure[] {
 export function decideTask(world: World, brott: Brott, config: SimConfig): BrottTask {
   // Already busy with a target task? Keep going unless preempted by low energy.
   if (brott.task.kind === 'recharge' && brott.energy < 1) return brott.task;
+  // Low energy always wins, regardless of job restriction.
   if (brott.energy < config.lowEnergyThreshold && brott.task.kind !== 'recharge') {
     const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
     if (charger) return { kind: 'walk', targetId: charger.id, targetPos: charger.pos, progress: 0 };
   }
-  if (brott.task.kind === 'walk' || brott.task.kind === 'clean' || brott.task.kind === 'collect') {
-    // ongoing task is still valid as long as target exists; let world.ts re-validate
-    return brott.task;
+
+  const job = brott.job ?? 'auto';
+
+  // recharge_only: head to (and stay at) the charger; never pick work.
+  if (job === 'recharge_only') {
+    const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
+    if (charger) return { kind: 'walk', targetId: charger.id, targetPos: charger.pos, progress: 0 };
+    return { kind: 'idle', progress: 0 };
   }
 
-  // Idle: pick a priority
+  // For non-auto jobs, ongoing tasks must match the job; otherwise re-decide.
+  if (brott.task.kind === 'walk' || brott.task.kind === 'clean' || brott.task.kind === 'collect') {
+    if (job === 'auto') return brott.task;
+    if (job === 'clean' && (brott.task.kind === 'clean' || brott.task.kind === 'walk')) {
+      // walk could be toward a debris from before — re-validate the target kind.
+      const tid = brott.task.targetId;
+      const isCleanTarget = !!tid && world.structures.some(s => s.id === tid && s.kind === 'tidal_generator');
+      const isChargerWalk = !!tid && world.structures.some(s => s.id === tid && s.kind === 'charger');
+      if (brott.task.kind === 'clean' || isCleanTarget || isChargerWalk) return brott.task;
+    }
+    if (job === 'collect' && (brott.task.kind === 'collect' || brott.task.kind === 'walk')) {
+      const tid = brott.task.targetId;
+      const isDebrisTarget = !!tid && world.debris.some(d => d.id === tid);
+      const isChargerWalk = !!tid && world.structures.some(s => s.id === tid && s.kind === 'charger');
+      if (brott.task.kind === 'collect' || isDebrisTarget || isChargerWalk) return brott.task;
+    }
+  }
+
+  // Idle: pick a priority based on job.
   const gens = structuresOfKind(world, 'tidal_generator');
-  // Generalize for multiple generators: pick the dirtiest one above the threshold.
-  let dirtiest: Structure | undefined;
-  let dirtiestF = config.highFoulingThreshold;
-  for (const g of gens) {
-    if (g.fouling >= dirtiestF) { dirtiestF = g.fouling; dirtiest = g; }
+  const considerClean = job === 'auto' || job === 'clean';
+  const considerCollect = job === 'auto' || job === 'collect';
+
+  if (considerClean) {
+    let dirtiest: Structure | undefined;
+    let dirtiestF = config.highFoulingThreshold;
+    for (const g of gens) {
+      if (g.fouling >= dirtiestF) { dirtiestF = g.fouling; dirtiest = g; }
+    }
+    if (dirtiest) {
+      return { kind: 'walk', targetId: dirtiest.id, targetPos: dirtiest.pos, progress: 0 };
+    }
   }
-  if (dirtiest) {
-    return { kind: 'walk', targetId: dirtiest.id, targetPos: dirtiest.pos, progress: 0 };
-  }
-  if (world.debris.length > 0) {
+  if (considerCollect && world.debris.length > 0) {
     const d = nearest(brott.pos, world.debris)!;
     return { kind: 'walk', targetId: d.id, targetPos: d.pos, progress: 0 };
   }
-  // No work — top up energy opportunistically if not full
+
+  // No work for this job. For restricted jobs, idle at the charger.
+  if (job === 'clean' || job === 'collect') {
+    const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
+    if (charger) return { kind: 'walk', targetId: charger.id, targetPos: charger.pos, progress: 0 };
+    return { kind: 'idle', progress: 0 };
+  }
+
+  // auto: top up energy opportunistically if not full
   if (brott.energy < 0.95) {
     const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
     if (charger) return { kind: 'walk', targetId: charger.id, targetPos: charger.pos, progress: 0 };

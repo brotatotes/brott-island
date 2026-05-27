@@ -34,6 +34,7 @@ export function createWorld(opts: SimOptions = {}): { world: World; rng: Rng; co
     energy: 1,
     capabilities: ['clean', 'recharge', 'collect'],
     task: { kind: 'idle', progress: 0 },
+    job: 'auto',
   };
 
   const world: World = {
@@ -229,3 +230,36 @@ export function buildTidalGenerator(world: World): string | null {
 }
 
 export const MAX_TIDAL_GENERATORS = GENERATOR_SLOTS.length;
+
+// --- Brott building ---
+
+export const BROTT_COST = 100;
+export const MAX_BROTTS = 4;
+
+/**
+ * Attempt to build a new brott. Returns the new brott id on success, null on failure.
+ * Spends BROTT_COST salvage. Spawns at the charger position with full energy and 'auto' job.
+ * Returns null if salvage insufficient OR max-brotts cap hit.
+ */
+export function buildBrott(world: World): string | null {
+  if ((world.inventory.salvage ?? 0) < BROTT_COST) return null;
+  if (world.brotts.length >= MAX_BROTTS) return null;
+  const charger = world.structures.find(s => s.kind === 'charger');
+  if (!charger) return null;
+
+  world.inventory.salvage = (world.inventory.salvage ?? 0) - BROTT_COST;
+
+  const n = world.brotts.length + 1;
+  const id = `brott-${n}`;
+  const name = `Brott-${String(n).padStart(3, '0')}`;
+  world.brotts.push({
+    id,
+    name,
+    pos: { x: charger.pos.x, y: charger.pos.y },
+    energy: 1,
+    capabilities: ['clean', 'recharge', 'collect'],
+    task: { kind: 'idle', progress: 0 },
+    job: 'auto',
+  });
+  return id;
+}

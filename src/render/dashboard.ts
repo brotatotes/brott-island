@@ -1,18 +1,20 @@
 // Dashboard DOM updater. Reads world state, mutates only the dashboard DOM and
 // (via callbacks) world entity names. Keeps the sim DOM-free.
 
-import { World, Brott, Structure } from '../sim/types';
-import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS } from '../sim/world';
+import { World, Brott, Structure, Job } from '../sim/types';
+import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS, buildBrott, BROTT_COST, MAX_BROTTS } from '../sim/world';
 import { DEFAULT_CONFIG } from '../sim/types';
 
 export interface DashboardCallbacks {
   onBuildGenerator?: (newId: string) => void;
+  onBuildBrott?: (newId: string) => void;
 }
 
 type RowCache = {
   el: HTMLLIElement;
   nameEl: HTMLSpanElement;
   metaEl: HTMLSpanElement;
+  jobEl: HTMLSelectElement;
   brottId: string;
 };
 
@@ -41,6 +43,8 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
 
   const buildBtn = document.getElementById('build-gen') as HTMLButtonElement;
   const buildHint = document.getElementById('build-hint')!;
+  const buildBrottBtn = document.getElementById('build-brott') as HTMLButtonElement;
+  const buildBrottHint = document.getElementById('build-brott-hint')!;
   const log = document.getElementById('event-log') as HTMLDivElement;
 
   let buildCount = 0;
@@ -51,6 +55,14 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
       const n = world.structures.filter(s => s.kind === 'tidal_generator').length;
       pushLog(log, `Built tidal generator #${n}`);
       callbacks.onBuildGenerator?.(newId);
+    }
+  });
+  buildBrottBtn.addEventListener('click', () => {
+    const newId = buildBrott(world);
+    if (newId) {
+      const b = world.brotts.find(x => x.id === newId);
+      pushLog(log, `Built ${b?.name ?? newId}`);
+      callbacks.onBuildBrott?.(newId);
     }
   });
 
@@ -95,6 +107,20 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
       const need = TIDAL_GENERATOR_COST - (world.inventory.salvage ?? 0);
       buildHint.textContent = `Need ${need} more salvage`;
     }
+
+    // Build Brott button
+    const brottsCount = world.brotts.length;
+    const brottsFull = brottsCount >= MAX_BROTTS;
+    const canAffordBrott = (world.inventory.salvage ?? 0) >= BROTT_COST;
+    buildBrottBtn.disabled = !canAffordBrott || brottsFull;
+    if (brottsFull) {
+      buildBrottHint.textContent = `All Brott slots full (${MAX_BROTTS})`;
+    } else if (canAffordBrott) {
+      buildBrottHint.textContent = `Ready to build (cost ${BROTT_COST} salvage)`;
+    } else {
+      const needB = BROTT_COST - (world.inventory.salvage ?? 0);
+      buildBrottHint.textContent = `Need ${needB} more salvage`;
+    }
   }
 
   return { update };
@@ -119,6 +145,7 @@ function syncBrottRows(
       if (row.nameEl.textContent !== b.name) row.nameEl.textContent = b.name;
     }
     row.metaEl.textContent = `${(b.energy * 100).toFixed(0)}%  ${b.task.kind}`;
+    if (row.jobEl.value !== b.job) row.jobEl.value = b.job;
   }
   // Remove rows for departed brotts
   for (const [id, row] of cache) {
@@ -150,16 +177,29 @@ function createBrottRow(brott: Brott): RowCache {
 
   li.appendChild(left);
 
-  // Disabled "Jobs" dropdown placeholder
+  // Active Jobs dropdown
   const jobSel = document.createElement('select');
   jobSel.className = 'job-select';
-  jobSel.disabled = true;
-  const opt = document.createElement('option');
-  opt.textContent = 'auto';
-  jobSel.appendChild(opt);
+  const jobOptions: { value: Job; label: string }[] = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'clean', label: 'Clean only' },
+    { value: 'collect', label: 'Collect only' },
+    { value: 'recharge_only', label: 'Recharge only' },
+  ];
+  for (const o of jobOptions) {
+    const opt = document.createElement('option');
+    opt.value = o.value;
+    opt.textContent = o.label;
+    jobSel.appendChild(opt);
+  }
+  jobSel.value = brott.job;
+  jobSel.addEventListener('change', () => {
+    const next = jobSel.value as Job;
+    if (brott.job !== next) brott.job = next;
+  });
   li.appendChild(jobSel);
 
-  return { el: li, nameEl: nameSpan, metaEl: meta, brottId: brott.id };
+  return { el: li, nameEl: nameSpan, metaEl: meta, jobEl: jobSel, brottId: brott.id };
 }
 
 function startEdit(nameSpan: HTMLSpanElement, brott: Brott): void {

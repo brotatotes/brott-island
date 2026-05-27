@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST } from '../src/sim/world';
+import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST, buildBrott, BROTT_COST, MAX_BROTTS } from '../src/sim/world';
 
 describe('sim core', () => {
   it('is deterministic given the same seed', () => {
@@ -128,5 +128,131 @@ describe('sim core', () => {
     const { world, rng, config } = createWorld({ seed: 99 });
     run(world, config, rng, 100);
     expect(world.tick).toBe(100);
+  });
+
+  it('buildBrott fails without enough salvage', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = BROTT_COST - 1;
+    const id = buildBrott(world);
+    expect(id).toBeNull();
+    expect(world.inventory.salvage).toBe(BROTT_COST - 1);
+    expect(world.brotts.length).toBe(1);
+  });
+
+  it('buildBrott spends salvage and adds a brott at the charger with full energy + auto job', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = BROTT_COST + 25;
+    const charger = world.structures.find(s => s.kind === 'charger')!;
+    const id = buildBrott(world);
+    expect(id).not.toBeNull();
+    expect(world.inventory.salvage).toBe(25);
+    expect(world.brotts.length).toBe(2);
+    const nb = world.brotts.find(b => b.id === id)!;
+    expect(nb.pos.x).toBe(charger.pos.x);
+    expect(nb.pos.y).toBe(charger.pos.y);
+    expect(nb.energy).toBe(1);
+    expect(nb.job).toBe('auto');
+    expect(nb.capabilities).toEqual(['clean', 'recharge', 'collect']);
+    expect(nb.name).toBe('Brott-002');
+  });
+
+  it('buildBrott caps at MAX_BROTTS', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = BROTT_COST * 100;
+    let built = 1; // starts with 1
+    while (built < MAX_BROTTS) {
+      const id = buildBrott(world);
+      expect(id).not.toBeNull();
+      built += 1;
+    }
+    expect(world.brotts.length).toBe(MAX_BROTTS);
+    // Next build should fail despite plenty of salvage.
+    const overflow = buildBrott(world);
+    expect(overflow).toBeNull();
+    expect(world.brotts.length).toBe(MAX_BROTTS);
+  });
+
+  it('job=clean restricts brott to cleaning', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    const b = world.brotts[0];
+    b.job = 'clean';
+    b.energy = 1;
+    b.task = { kind: 'idle', progress: 0 };
+    // Generators clean (no clean work above threshold)
+    for (const s of world.structures) if (s.kind === 'tidal_generator') s.fouling = 0;
+    // Spawn debris explicitly
+    world.debris.push({ id: 'debris-test-1', pos: { x: 34, y: 18 } });
+    // Tick a few times to let it pick a task.
+    for (let i = 0; i < 5; i++) tick(world, config, rng);
+    expect(b.task.kind).not.toBe('collect');
+    // Walking, it must NOT be walking toward the debris.
+    if (b.task.kind === 'walk') {
+      expect(b.task.targetId).not.toBe('debris-test-1');
+    }
+  });
+
+  it('job=collect restricts brott to collection', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    const b = world.brotts[0];
+    b.job = 'collect';
+    b.energy = 1;
+    b.task = { kind: 'idle', progress: 0 };
+    // Force generators very dirty
+    for (const s of world.structures) if (s.kind === 'tidal_generator') s.fouling = 0.95;
+    // No debris yet — still should not start cleaning.
+    for (let i = 0; i < 5; i++) tick(world, config, rng);
+    expect(b.task.kind).not.toBe('clean');
+    if (b.task.kind === 'walk') {
+      const tid = b.task.targetId;
+      const gen = world.structures.find(s => s.id === tid && s.kind === 'tidal_generator');
+      expect(gen).toBeUndefined();
+    }
+  });
+
+  it('job=recharge_only keeps brott at charger', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    const b = world.brotts[0];
+    b.job = 'recharge_only';
+    b.energy = 1;
+    b.task = { kind: 'idle', progress: 0 };
+    for (const s of world.structures) if (s.kind === 'tidal_generator') s.fouling = 0.95;
+    world.debris.push({ id: 'debris-test-2', pos: { x: 34, y: 18 } });
+    for (let i = 0; i < 500; i++) tick(world, config, rng);
+    // Should never have picked clean or collect.
+    expect(b.task.kind === 'clean' || b.task.kind === 'collect').toBe(false);
+    // Debris must remain (nobody collected it).
+    expect(world.debris.some(d => d.id === 'debris-test-2')).toBe(true);
+    // Brott should be at or heading to charger.
+    const charger = world.structures.find(s => s.kind === 'charger')!;
+    const d = Math.hypot(b.pos.x - charger.pos.x, b.pos.y - charger.pos.y);
+    expect(d).toBeLessThan(0.5);
+  });
+
+  it('low energy still wins over job restriction', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    const b = world.brotts[0];
+    b.job = 'clean';
+    b.energy = 0.1;
+    b.task = { kind: 'idle', progress: 0 };
+    for (const s of world.structures) if (s.kind === 'tidal_generator') s.fouling = 0;
+    // Move brott away from charger so we can detect motion toward it.
+    b.pos = { x: 30, y: 18 };
+    for (let i = 0; i < 500; i++) tick(world, config, rng);
+    expect(b.energy).toBeGreaterThan(0.5);
+  });
+
+  it('two brotts can have different jobs and act independently', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    world.inventory.salvage = BROTT_COST;
+    const id2 = buildBrott(world)!;
+    const b1 = world.brotts[0];
+    const b2 = world.brotts.find(x => x.id === id2)!;
+    b1.job = 'clean';
+    b2.job = 'collect';
+    run(world, config, rng, 500);
+    expect(world.brotts.length).toBe(2);
+    // Both should still be alive and operating (energy above 0 because they recharge when low).
+    expect(b1.energy).toBeGreaterThan(0);
+    expect(b2.energy).toBeGreaterThan(0);
   });
 });
