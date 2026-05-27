@@ -51,7 +51,7 @@ describe('sim core', () => {
     // Run long enough that some debris should have spawned and been collected
     run(world, config, rng, 20_000);
     expect(world.metrics.debrisCollected).toBeGreaterThan(0);
-    expect(world.inventory.salvage).toBe(world.metrics.debrisCollected);
+    expect(world.inventory.salvage).toBe(world.metrics.debrisCollected * 2);
   });
 
   it('buildTidalGenerator fails without enough salvage', () => {

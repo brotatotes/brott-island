@@ -22,5 +22,25 @@
   {
     "name": "fast-cooldown",
     "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 50 }
+  },
+  {
+    "name": "econ-faster-debris",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
+    "config": { "debrisSpawnChance": 0.024 }
+  },
+  {
+    "name": "econ-slower-debris",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
+    "config": { "debrisSpawnChance": 0.006 }
+  },
+  {
+    "name": "econ-cleaner-gens",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
+    "config": { "foulingRatePerTick": 0.0004 }
+  },
+  {
+    "name": "econ-dirtier-gens",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
+    "config": { "foulingRatePerTick": 0.0016 }
   }
 ]

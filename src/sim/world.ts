@@ -125,7 +125,7 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
         const idx = world.debris.findIndex(d => d.id === brott.task.targetId);
         if (idx >= 0) {
           world.debris.splice(idx, 1);
-          world.inventory.salvage = (world.inventory.salvage ?? 0) + 1;
+          world.inventory.salvage = (world.inventory.salvage ?? 0) + 2;
           world.metrics.debrisCollected += 1;
         }
         brott.task = { kind: 'idle', progress: 0 };

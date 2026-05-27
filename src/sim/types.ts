@@ -94,7 +94,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   collectDuration: 40,
   foulingRatePerTick: 0.0008,
   batteryCapacity: 500,
-  debrisSpawnChance: 0.004,
+  debrisSpawnChance: 0.012,
   lowEnergyThreshold: 0.25,
   highFoulingThreshold: 0.5,
   autoBuild: {

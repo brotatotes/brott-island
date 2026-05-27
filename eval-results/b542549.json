@@ -1,0 +1,921 @@
+{
+  "gitSha": "b542549",
+  "timestamp": "2026-05-27T14:53:46.247Z",
+  "nodeVersion": "v24.14.1",
+  "ticks": 50000,
+  "seeds": [
+    1,
+    2,
+    3,
+    5,
+    7,
+    11,
+    13,
+    17
+  ],
+  "elapsedMs": 5580,
+  "variants": [
+    {
+      "name": "baseline",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "more-brotts",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1.5,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "fewer-brotts",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 0.5,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "tight-utilization",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.3,
+        "buildCooldownTicks": 200
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "loose-utilization",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.7,
+        "buildCooldownTicks": 200
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "fast-cooldown",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 50
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15683807.039999736,
+          "generated": 15684307.039999742,
+          "uptimePct": 6.708,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 2,
+          "delivered": 15877643.459999762,
+          "generated": 15878143.45999976,
+          "uptimePct": 6.7,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 17397964.43999966,
+          "generated": 17398464.439999662,
+          "uptimePct": 7.554,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 30
+        },
+        {
+          "seed": 5,
+          "delivered": 16068270.17999971,
+          "generated": 16068770.179999707,
+          "uptimePct": 6.88,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16823259.35999965,
+          "generated": 16823759.359999657,
+          "uptimePct": 7.188,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 6
+        },
+        {
+          "seed": 11,
+          "delivered": 16870914.9999997,
+          "generated": 16871414.9999997,
+          "uptimePct": 7.17,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16641562.07999967,
+          "generated": 16642062.079999674,
+          "uptimePct": 7.108,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 17,
+          "delivered": 16673384.239999723,
+          "generated": 16673884.239999726,
+          "uptimePct": 7.064,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 16504600.724999703,
+      "stdDelivered": 577956.5627126727,
+      "meanUptimePct": 7.0465,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 0
+    },
+    {
+      "name": "econ-faster-debris",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "config": {
+        "debrisSpawnChance": 0.024
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 17535434.899999775,
+          "generated": 17535934.89999978,
+          "uptimePct": 7.512,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 14
+        },
+        {
+          "seed": 2,
+          "delivered": 17467777.139999766,
+          "generated": 17468277.139999766,
+          "uptimePct": 7.366,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 3,
+          "delivered": 17465993.219999745,
+          "generated": 17466493.219999738,
+          "uptimePct": 7.42,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 5,
+          "delivered": 16509613.459999671,
+          "generated": 16510113.459999671,
+          "uptimePct": 7.062,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 7,
+          "delivered": 16935560.11999967,
+          "generated": 16936060.119999666,
+          "uptimePct": 7.21,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 11,
+          "delivered": 16583314.5999997,
+          "generated": 16583814.599999698,
+          "uptimePct": 7.034,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 16766171.059999673,
+          "generated": 16766671.059999675,
+          "uptimePct": 7.052,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 17,
+          "delivered": 16827962.779999666,
+          "generated": 16828462.77999967,
+          "uptimePct": 7.094,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        }
+      ],
+      "meanDelivered": 17011478.40999971,
+      "stdDelivered": 418181.87983039336,
+      "meanUptimePct": 7.21875,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 3.07112964103538
+    },
+    {
+      "name": "econ-slower-debris",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "config": {
+        "debrisSpawnChance": 0.006
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 15186579.499999732,
+          "generated": 15187079.499999736,
+          "uptimePct": 6.53,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 2,
+          "delivered": 14333025.739999766,
+          "generated": 14333525.739999766,
+          "uptimePct": 6.174,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 15179458.49999978,
+          "generated": 15179958.499999778,
+          "uptimePct": 6.552,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 5,
+          "delivered": 15766240.759999698,
+          "generated": 15766740.759999702,
+          "uptimePct": 6.744,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 4
+        },
+        {
+          "seed": 7,
+          "delivered": 16022143.379999673,
+          "generated": 16022643.379999675,
+          "uptimePct": 6.81,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 10
+        },
+        {
+          "seed": 11,
+          "delivered": 14861001.299999759,
+          "generated": 14861501.299999757,
+          "uptimePct": 6.338,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 13,
+          "delivered": 15678348.539999764,
+          "generated": 15678848.539999764,
+          "uptimePct": 6.68,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 2
+        },
+        {
+          "seed": 17,
+          "delivered": 14559983.379999742,
+          "generated": 14560483.379999742,
+          "uptimePct": 6.24,
+          "finalBrotts": 1,
+          "finalGens": 7,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 15198347.63749974,
+      "stdDelivered": 597869.0303177312,
+      "meanUptimePct": 6.508500000000001,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 7,
+      "vsBaselinePct": -7.914478570338068
+    },
+    {
+      "name": "econ-cleaner-gens",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "config": {
+        "foulingRatePerTick": 0.0004
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 21512677.960000385,
+          "generated": 21513177.96000038,
+          "uptimePct": 12.838,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 510
+        },
+        {
+          "seed": 2,
+          "delivered": 20997855.960000318,
+          "generated": 20998355.960000318,
+          "uptimePct": 11.888,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 538
+        },
+        {
+          "seed": 3,
+          "delivered": 21844338.000000358,
+          "generated": 21844838.00000036,
+          "uptimePct": 13.284,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 562
+        },
+        {
+          "seed": 5,
+          "delivered": 21646980.220000327,
+          "generated": 21647480.220000323,
+          "uptimePct": 12.666,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 572
+        },
+        {
+          "seed": 7,
+          "delivered": 21842427.1000004,
+          "generated": 21842927.100000404,
+          "uptimePct": 13.124,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 710
+        },
+        {
+          "seed": 11,
+          "delivered": 21629115.500000417,
+          "generated": 21629615.50000042,
+          "uptimePct": 13.294,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 542
+        },
+        {
+          "seed": 13,
+          "delivered": 21897928.48000038,
+          "generated": 21898428.480000377,
+          "uptimePct": 13.474,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 592
+        },
+        {
+          "seed": 17,
+          "delivered": 21797491.520000372,
+          "generated": 21797991.52000037,
+          "uptimePct": 12.732,
+          "finalBrotts": 4,
+          "finalGens": 7,
+          "finalSalvage": 602
+        }
+      ],
+      "meanDelivered": 21646101.84250037,
+      "stdDelivered": 293377.0452260877,
+      "meanUptimePct": 12.912500000000001,
+      "meanFinalBrotts": 4,
+      "meanFinalGens": 7,
+      "vsBaselinePct": 31.15192668498049
+    },
+    {
+      "name": "econ-dirtier-gens",
+      "policy": {
+        "enabled": true,
+        "brottPerGenTarget": 1,
+        "maxIdleRatio": 0.5,
+        "buildCooldownTicks": 200
+      },
+      "config": {
+        "foulingRatePerTick": 0.0016
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "delivered": 9415115.619999927,
+          "generated": 9415615.619999923,
+          "uptimePct": 3.956,
+          "finalBrotts": 1,
+          "finalGens": 4,
+          "finalSalvage": 46
+        },
+        {
+          "seed": 2,
+          "delivered": 9554276.259999942,
+          "generated": 9554776.259999946,
+          "uptimePct": 3.99,
+          "finalBrotts": 1,
+          "finalGens": 5,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 3,
+          "delivered": 9494648.659999916,
+          "generated": 9495148.659999918,
+          "uptimePct": 3.986,
+          "finalBrotts": 1,
+          "finalGens": 4,
+          "finalSalvage": 48
+        },
+        {
+          "seed": 5,
+          "delivered": 9669941.039999925,
+          "generated": 9670441.039999919,
+          "uptimePct": 4.072,
+          "finalBrotts": 1,
+          "finalGens": 4,
+          "finalSalvage": 48
+        },
+        {
+          "seed": 7,
+          "delivered": 9636069.239999944,
+          "generated": 9636569.239999946,
+          "uptimePct": 4.024,
+          "finalBrotts": 1,
+          "finalGens": 5,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 11,
+          "delivered": 9640364.119999945,
+          "generated": 9640864.119999947,
+          "uptimePct": 4.032,
+          "finalBrotts": 1,
+          "finalGens": 5,
+          "finalSalvage": 0
+        },
+        {
+          "seed": 13,
+          "delivered": 9704676.139999924,
+          "generated": 9705176.139999926,
+          "uptimePct": 4.1,
+          "finalBrotts": 1,
+          "finalGens": 4,
+          "finalSalvage": 48
+        },
+        {
+          "seed": 17,
+          "delivered": 9408369.059999945,
+          "generated": 9408869.059999945,
+          "uptimePct": 3.942,
+          "finalBrotts": 1,
+          "finalGens": 5,
+          "finalSalvage": 0
+        }
+      ],
+      "meanDelivered": 9565432.517499933,
+      "stdDelivered": 115458.10942296754,
+      "meanUptimePct": 4.0127500000000005,
+      "meanFinalBrotts": 1,
+      "meanFinalGens": 4.5,
+      "vsBaselinePct": -42.04384173310496
+    }
+  ]
+}
