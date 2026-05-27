@@ -72,7 +72,7 @@ export interface SimConfig {
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
-  brottSpeed: 0.6,
+  brottSpeed: 0.15,
   brottEnergyDrainPerTick: 0.0006,
   brottRechargeRate: 0.01,
   cleanRate: 0.015,
