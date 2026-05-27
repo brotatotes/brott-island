@@ -3,11 +3,13 @@
 
 export type Vec2 = { x: number; y: number };
 
-export type Capability = 'clean' | 'recharge' | 'collect';
+export type Capability = 'clean' | 'recharge' | 'collect' | 'repair';
 
 export type Job = 'auto' | 'clean' | 'collect' | 'recharge_only';
 
-export type BrottTaskKind = 'idle' | 'walk' | 'clean' | 'recharge' | 'collect';
+export type BrottTaskKind = 'idle' | 'walk' | 'clean' | 'recharge' | 'collect' | 'repair';
+
+export type Phase = 'recovery' | 'operations';
 
 export interface BrottTask {
   kind: BrottTaskKind;
@@ -48,6 +50,7 @@ export type Inventory = Record<string, number>;
 
 export interface World {
   tick: number;
+  phase: Phase;                // 'recovery' until starter structures repaired, then 'operations'
   rngState: number;            // for reproducibility/save (not yet used)
   brotts: Brott[];
   structures: Structure[];
@@ -77,6 +80,7 @@ export interface SimConfig {
   brottEnergyDrainPerTick: number;
   brottRechargeRate: number;      // energy/tick when on charger
   cleanRate: number;              // fouling reduced per tick when cleaning
+  repairRate: number;             // health restored per tick when repairing
   collectDuration: number;        // ticks to collect one debris
   foulingRatePerTick: number;     // fouling added per tick
   debrisSpawnChance: number;      // per tick, 0..1
@@ -91,6 +95,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   brottEnergyDrainPerTick: 0.0006,
   brottRechargeRate: 0.01,
   cleanRate: 0.015,
+  repairRate: 0.005,
   collectDuration: 40,
   foulingRatePerTick: 0.0008,
   batteryCapacity: 500,

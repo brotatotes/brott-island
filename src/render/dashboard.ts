@@ -31,6 +31,7 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
 } {
   // Metric fields
   const elTick = document.getElementById('m-tick')!;
+  const elPhase = document.getElementById('m-phase')!;
   const elPower = document.getElementById('m-power')!;
   const elDelivered = document.getElementById('m-delivered')!;
   const elSalvage = document.getElementById('m-salvage')!;
@@ -72,6 +73,7 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   function update(): void {
     // Metrics
     elTick.textContent = String(world.tick);
+    elPhase.textContent = world.phase;
     const cap = DEFAULT_CONFIG.batteryCapacity;
     const stored = world.inventory.power ?? 0;
     elPower.textContent = `${stored.toFixed(0)} / ${cap} kWh`;
@@ -95,11 +97,14 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
     syncStructureRows(structList, world.structures, structRows);
 
     // Build button
+    const recovery = world.phase === 'recovery';
     const gensCount = world.structures.filter(s => s.kind === 'tidal_generator').length;
     const slotsFull = gensCount >= MAX_TIDAL_GENERATORS;
     const canAfford = (world.inventory.salvage ?? 0) >= TIDAL_GENERATOR_COST;
-    buildBtn.disabled = !canAfford || slotsFull;
-    if (slotsFull) {
+    buildBtn.disabled = recovery || !canAfford || slotsFull;
+    if (recovery) {
+      buildHint.textContent = `Phase 1: complete recovery first.`;
+    } else if (slotsFull) {
       buildHint.textContent = `All generator slots full (${MAX_TIDAL_GENERATORS})`;
     } else if (canAfford) {
       buildHint.textContent = `Ready to build (cost ${TIDAL_GENERATOR_COST} salvage)`;
@@ -112,8 +117,10 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
     const brottsCount = world.brotts.length;
     const brottsFull = brottsCount >= MAX_BROTTS;
     const canAffordBrott = (world.inventory.salvage ?? 0) >= BROTT_COST;
-    buildBrottBtn.disabled = !canAffordBrott || brottsFull;
-    if (brottsFull) {
+    buildBrottBtn.disabled = recovery || !canAffordBrott || brottsFull;
+    if (recovery) {
+      buildBrottHint.textContent = `Phase 1: complete recovery first.`;
+    } else if (brottsFull) {
       buildBrottHint.textContent = `All Brott slots full (${MAX_BROTTS})`;
     } else if (canAffordBrott) {
       buildBrottHint.textContent = `Ready to build (cost ${BROTT_COST} salvage)`;
@@ -295,6 +302,7 @@ function labelFor(s: Structure): string {
 }
 
 function statusFor(s: Structure): string {
+  if (s.health < 0.8) return 'Broken';
   if (s.kind === 'tidal_generator') {
     if (s.fouling >= 0.5) return 'Fouled';
     return 'Active';

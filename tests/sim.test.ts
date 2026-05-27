@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST, buildBrott, BROTT_COST, MAX_BROTTS } from '../src/sim/world';
 
+// Helper: bring the seeded outpost to operations phase instantly for tests that
+// don't care about Phase 1.
+function skipRecovery(world: ReturnType<typeof createWorld>['world']): void {
+  for (const s of world.structures) s.health = 1;
+  world.phase = 'operations';
+}
+
 describe('sim core', () => {
   it('is deterministic given the same seed', () => {
     const a = createWorld({ seed: 42 });
     const b = createWorld({ seed: 42 });
+    skipRecovery(a.world); skipRecovery(b.world);
     run(a.world, a.config, a.rng, 5000);
     run(b.world, b.config, b.rng, 5000);
     expect(a.world.metrics).toEqual(b.world.metrics);
@@ -15,6 +23,7 @@ describe('sim core', () => {
   it('different seeds diverge', () => {
     const a = createWorld({ seed: 1 });
     const b = createWorld({ seed: 2 });
+    skipRecovery(a.world); skipRecovery(b.world);
     run(a.world, a.config, a.rng, 5000);
     run(b.world, b.config, b.rng, 5000);
     // RNG drives debris spawn; collected counts very likely differ
@@ -26,6 +35,7 @@ describe('sim core', () => {
 
   it('generates power over time', () => {
     const { world, rng, config } = createWorld({ seed: 7 });
+    skipRecovery(world);
     run(world, config, rng, 2000);
     expect(world.metrics.totalPowerGenerated).toBeGreaterThan(0);
     expect(world.inventory.power).toBeGreaterThan(0);
@@ -33,6 +43,7 @@ describe('sim core', () => {
 
   it('battery caps stored power and overflow is delivered', () => {
     const { world, rng, config } = createWorld({ seed: 7 });
+    skipRecovery(world);
     run(world, config, rng, 20_000);
     expect(world.inventory.power).toBeLessThanOrEqual(config.batteryCapacity + 0.001);
     expect(world.metrics.totalPowerDelivered).toBeGreaterThan(0);
@@ -40,6 +51,7 @@ describe('sim core', () => {
 
   it('brott returns to charger when low on energy', () => {
     const { world, rng, config } = createWorld({ seed: 3 });
+    skipRecovery(world);
     // Force low energy
     world.brotts[0].energy = 0.1;
     for (let i = 0; i < 500; i++) tick(world, config, rng);
@@ -48,6 +60,7 @@ describe('sim core', () => {
 
   it('brott collects debris into salvage', () => {
     const { world, rng, config } = createWorld({ seed: 11 });
+    skipRecovery(world);
     // Run long enough that some debris should have spawned and been collected
     run(world, config, rng, 20_000);
     expect(world.metrics.debrisCollected).toBeGreaterThan(0);
@@ -56,6 +69,7 @@ describe('sim core', () => {
 
   it('buildTidalGenerator fails without enough salvage', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = TIDAL_GENERATOR_COST - 1;
     const id = buildTidalGenerator(world);
     expect(id).toBeNull();
@@ -65,6 +79,7 @@ describe('sim core', () => {
 
   it('buildTidalGenerator spends salvage and adds a generator', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = TIDAL_GENERATOR_COST + 10;
     const id = buildTidalGenerator(world);
     expect(id).not.toBeNull();
@@ -85,6 +100,7 @@ describe('sim core', () => {
 
   it('generator placement stays within canvas bounds across many builds', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = TIDAL_GENERATOR_COST * 20;
     for (let i = 0; i < 20; i++) buildTidalGenerator(world);
     const gens = world.structures.filter(s => s.kind === 'tidal_generator');
@@ -101,6 +117,7 @@ describe('sim core', () => {
 
   it('brott cleans the dirtiest generator when multiple exist', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = TIDAL_GENERATOR_COST;
     const id2 = buildTidalGenerator(world)!;
     const gens = world.structures.filter(s => s.kind === 'tidal_generator');
@@ -119,6 +136,7 @@ describe('sim core', () => {
   it('sim module exports do not touch the DOM', () => {
     // Importing world/buildTidalGenerator under node would throw if it touched DOM.
     const { world } = createWorld({ seed: 1 });
+    skipRecovery(world);
     world.inventory.salvage = TIDAL_GENERATOR_COST;
     expect(() => buildTidalGenerator(world)).not.toThrow();
   });
@@ -132,6 +150,7 @@ describe('sim core', () => {
 
   it('buildBrott fails without enough salvage', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = BROTT_COST - 1;
     const id = buildBrott(world);
     expect(id).toBeNull();
@@ -141,6 +160,7 @@ describe('sim core', () => {
 
   it('buildBrott spends salvage and adds a brott at the charger with full energy + auto job', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = BROTT_COST + 25;
     const charger = world.structures.find(s => s.kind === 'charger')!;
     const id = buildBrott(world);
@@ -152,12 +172,13 @@ describe('sim core', () => {
     expect(nb.pos.y).toBe(charger.pos.y);
     expect(nb.energy).toBe(1);
     expect(nb.job).toBe('auto');
-    expect(nb.capabilities).toEqual(['clean', 'recharge', 'collect']);
+    expect(nb.capabilities).toEqual(['clean', 'recharge', 'collect', 'repair']);
     expect(nb.name).toBe('Brott-002');
   });
 
   it('buildBrott caps at MAX_BROTTS', () => {
     const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = BROTT_COST * 100;
     let built = 1; // starts with 1
     while (built < MAX_BROTTS) {
@@ -174,6 +195,7 @@ describe('sim core', () => {
 
   it('job=clean restricts brott to cleaning', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     const b = world.brotts[0];
     b.job = 'clean';
     b.energy = 1;
@@ -193,6 +215,7 @@ describe('sim core', () => {
 
   it('job=collect restricts brott to collection', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     const b = world.brotts[0];
     b.job = 'collect';
     b.energy = 1;
@@ -211,6 +234,7 @@ describe('sim core', () => {
 
   it('job=recharge_only keeps brott at charger', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     const b = world.brotts[0];
     b.job = 'recharge_only';
     b.energy = 1;
@@ -230,6 +254,7 @@ describe('sim core', () => {
 
   it('low energy still wins over job restriction', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     const b = world.brotts[0];
     b.job = 'clean';
     b.energy = 0.1;
@@ -243,6 +268,7 @@ describe('sim core', () => {
 
   it('two brotts can have different jobs and act independently', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     world.inventory.salvage = BROTT_COST;
     const id2 = buildBrott(world)!;
     const b1 = world.brotts[0];
@@ -258,6 +284,7 @@ describe('sim core', () => {
 
   it('auto-build disabled (default) never builds even with plenty of salvage', () => {
     const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
     // Pre-fund the world with salvage; default config has autoBuild.enabled=false.
     world.inventory.salvage = 100000;
     const startBrotts = world.brotts.length;
@@ -274,6 +301,7 @@ describe('sim core', () => {
       seed: 5,
       config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } },
     });
+    skipRecovery(world);
     world.inventory.salvage = 100000;
     run(world, config, rng, 50_000);
     const gens = world.structures.filter(s => s.kind === 'tidal_generator').length;
@@ -285,6 +313,7 @@ describe('sim core', () => {
       seed: 5,
       config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 1.0, buildCooldownTicks: 200 } },
     });
+    skipRecovery(world);
     world.inventory.salvage = 100000;
     let prevCount = world.brotts.length + world.structures.filter(s => s.kind === 'tidal_generator').length;
     let prevTick = 0;
@@ -312,6 +341,7 @@ describe('sim core', () => {
     });
     a.world.inventory.salvage = 100000;
     b.world.inventory.salvage = 100000;
+    skipRecovery(a.world); skipRecovery(b.world);
     run(a.world, a.config, a.rng, 20_000);
     run(b.world, b.config, b.rng, 20_000);
     expect(a.world.brotts.length).toBe(b.world.brotts.length);
@@ -325,9 +355,99 @@ describe('sim core', () => {
       seed: 5,
       config: { autoBuild: { enabled: true, brottPerGenTarget: 4.0, maxIdleRatio: 1.0, buildCooldownTicks: 100 } },
     });
+    skipRecovery(world);
     world.inventory.salvage = 100000;
     run(world, config, rng, 30_000);
     // Should have built up to MAX_BROTTS before adding more generators.
     expect(world.brotts.length).toBe(MAX_BROTTS);
+  });
+});
+
+describe('phase 1 recovery', () => {
+  it('world starts in recovery phase with broken structures', () => {
+    const { world } = createWorld({ seed: 1 });
+    expect(world.phase).toBe('recovery');
+    const charger = world.structures.find(s => s.id === 'charger-1')!;
+    const gen = world.structures.find(s => s.id === 'tidal-1')!;
+    const intake = world.structures.find(s => s.id === 'intake-1')!;
+    expect(charger.health).toBe(1);
+    expect(gen.health).toBeLessThan(0.8);
+    expect(intake.health).toBeLessThan(0.8);
+  });
+
+  it('generator produces no output while it is broken', () => {
+    const { world, rng, config } = createWorld({ seed: 1 });
+    // Disable brott so it can't repair anything.
+    world.brotts[0].job = 'recharge_only';
+    run(world, config, rng, 1000);
+    expect(world.metrics.totalPowerGenerated).toBe(0);
+    expect(world.inventory.power).toBe(0);
+  });
+
+  it('brott repairs structures during recovery', () => {
+    const { world, rng, config } = createWorld({ seed: 1 });
+    run(world, config, rng, 20_000);
+    const gen = world.structures.find(s => s.id === 'tidal-1')!;
+    const intake = world.structures.find(s => s.id === 'intake-1')!;
+    expect(gen.health).toBeGreaterThanOrEqual(0.8);
+    expect(intake.health).toBeGreaterThanOrEqual(0.8);
+  });
+
+  it('phase transitions to operations after all starter structures repaired', () => {
+    const { world, rng, config } = createWorld({ seed: 1 });
+    let transitioned = false;
+    let transitionTick = -1;
+    for (let i = 0; i < 30_000; i++) {
+      tick(world, config, rng);
+      if (!transitioned && world.phase === 'operations') {
+        transitioned = true;
+        transitionTick = world.tick;
+      }
+    }
+    expect(transitioned).toBe(true);
+    expect(world.phase).toBe('operations');
+    expect(transitionTick).toBeGreaterThan(0);
+  });
+
+  it('auto-build does not fire during recovery', () => {
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 1.0, buildCooldownTicks: 100 } },
+    });
+    world.inventory.salvage = 100000;
+    // Park brott on charger so recovery never completes within window.
+    world.brotts[0].job = 'recharge_only';
+    run(world, config, rng, 5_000);
+    expect(world.phase).toBe('recovery');
+    expect(world.brotts.length).toBe(1);
+    expect(world.structures.filter(s => s.kind === 'tidal_generator').length).toBe(1);
+  });
+
+  it('debris does not spawn until intake is repaired', () => {
+    const { world, rng, config } = createWorld({
+      seed: 11,
+      config: { debrisSpawnChance: 1 }, // every tick if intake healthy
+    });
+    // Park brott so intake stays broken.
+    world.brotts[0].job = 'recharge_only';
+    run(world, config, rng, 500);
+    expect(world.debris.length).toBe(0);
+    // Now repair intake manually and run a few ticks.
+    const intake = world.structures.find(s => s.id === 'intake-1')!;
+    intake.health = 1;
+    run(world, config, rng, 50);
+    expect(world.debris.length).toBeGreaterThan(0);
+  });
+
+  it('generator only produces output once health >= 0.8', () => {
+    const { world, rng, config } = createWorld({ seed: 2 });
+    const gen = world.structures.find(s => s.id === 'tidal-1')!;
+    gen.health = 0.79;
+    world.brotts[0].job = 'recharge_only';
+    run(world, config, rng, 100);
+    expect(world.metrics.totalPowerGenerated).toBe(0);
+    gen.health = 0.8;
+    run(world, config, rng, 100);
+    expect(world.metrics.totalPowerGenerated).toBeGreaterThan(0);
   });
 });

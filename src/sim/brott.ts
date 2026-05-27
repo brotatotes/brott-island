@@ -19,6 +19,22 @@ function nearest<T extends { pos: Vec2 }>(from: Vec2, items: T[]): T | undefined
   return best;
 }
 
+function pickBrokenForRepair(world: World): Structure | undefined {
+  // Priority: charger > generator > intake.
+  const charger = world.structures.find(s => s.kind === 'charger' && s.health < 0.8);
+  if (charger) return charger;
+  const gens = world.structures.filter(s => s.kind === 'tidal_generator' && s.health < 0.8);
+  if (gens.length > 0) {
+    // Lowest-health generator first.
+    let best = gens[0];
+    for (const g of gens) if (g.health < best.health) best = g;
+    return best;
+  }
+  const intake = world.structures.find(s => s.kind === 'intake' && s.health < 0.8);
+  if (intake) return intake;
+  return undefined;
+}
+
 function structuresOfKind(world: World, kind: Structure['kind']): Structure[] {
   return world.structures.filter(s => s.kind === kind);
 }
@@ -26,6 +42,10 @@ function structuresOfKind(world: World, kind: Structure['kind']): Structure[] {
 export function decideTask(world: World, brott: Brott, config: SimConfig): BrottTask {
   // Already busy with a target task? Keep going unless preempted by low energy.
   if (brott.task.kind === 'recharge' && brott.energy < 1) return brott.task;
+  if (brott.task.kind === 'repair' && brott.task.targetId) {
+    const s = world.structures.find(st => st.id === brott.task.targetId);
+    if (s && s.health < 1 && brott.energy >= config.lowEnergyThreshold) return brott.task;
+  }
   // Low energy always wins, regardless of job restriction.
   if (brott.energy < config.lowEnergyThreshold && brott.task.kind !== 'recharge') {
     const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
@@ -39,6 +59,14 @@ export function decideTask(world: World, brott: Brott, config: SimConfig): Brott
     const charger = nearest(brott.pos, structuresOfKind(world, 'charger'));
     if (charger) return { kind: 'walk', targetId: charger.id, targetPos: charger.pos, progress: 0 };
     return { kind: 'idle', progress: 0 };
+  }
+
+  // Phase 1 / dormant structures: any structure under health 0.8 must be repaired before anything else.
+  // Priority charger > generator > intake so brotts stay charged, then output flows, then salvage flows.
+  // Applied across all non-recharge_only jobs so recovery can actually complete even under restricted jobs.
+  const broken = pickBrokenForRepair(world);
+  if (broken) {
+    return { kind: 'walk', targetId: broken.id, targetPos: broken.pos, progress: 0 };
   }
 
   // For non-auto jobs, ongoing tasks must match the job; otherwise re-decide.

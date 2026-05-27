@@ -160,6 +160,8 @@ export function render(
   for (const s of world.structures) {
     const px = s.pos.x * TILE;
     const py = s.pos.y * TILE;
+    const broken = s.health < 0.8;
+    if (broken) ctx.globalAlpha = 0.45;
     if (s.kind === 'charger') {
       ctx.fillStyle = COLORS.charger;
       ctx.fillRect(px - 8, py - 8, 16, 16);
@@ -184,6 +186,17 @@ export function render(
       ctx.beginPath();
       ctx.arc(px, py, 10 + Math.sin(t * 1.5) * 1.5, 0, Math.PI * 2);
       ctx.stroke();
+    }
+    if (broken) {
+      ctx.globalAlpha = 1;
+      // Small red broken indicator (X)
+      ctx.strokeStyle = '#c85a5a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px + 6, py - 14); ctx.lineTo(px + 12, py - 8);
+      ctx.moveTo(px + 12, py - 14); ctx.lineTo(px + 6, py - 8);
+      ctx.stroke();
+      ctx.lineWidth = 1;
     }
   }
 

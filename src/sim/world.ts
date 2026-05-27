@@ -20,11 +20,11 @@ export function createWorld(opts: SimOptions = {}): { world: World; rng: Rng; co
   };
   const generator: Structure = {
     id: 'tidal-1', kind: 'tidal_generator', pos: { x: 28, y: 14 },
-    tier: 1, health: 1, fouling: 0, outputBase: 100,
+    tier: 1, health: 0, fouling: 0, outputBase: 100,
   };
   const intake: Structure = {
     id: 'intake-1', kind: 'intake', pos: { x: 34, y: 18 },
-    tier: 1, health: 1, fouling: 0, outputBase: 0,
+    tier: 1, health: 0, fouling: 0, outputBase: 0,
   };
 
   const brott: Brott = {
@@ -32,13 +32,14 @@ export function createWorld(opts: SimOptions = {}): { world: World; rng: Rng; co
     name: 'Brott-001',
     pos: { x: 8, y: 10 },
     energy: 1,
-    capabilities: ['clean', 'recharge', 'collect'],
+    capabilities: ['clean', 'recharge', 'collect', 'repair'],
     task: { kind: 'idle', progress: 0 },
     job: 'auto',
   };
 
   const world: World = {
     tick: 0,
+    phase: 'recovery',
     rngState: seed,
     brotts: [brott],
     structures: [charger, generator, intake],
@@ -87,9 +88,19 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
         const struct = world.structures.find(s => s.id === brott.task.targetId);
         const debris = world.debris.find(de => de.id === brott.task.targetId);
         if (struct?.kind === 'tidal_generator') {
-          brott.task = { kind: 'clean', targetId: struct.id, progress: 0 };
+          if (struct.health < 0.8) {
+            brott.task = { kind: 'repair', targetId: struct.id, progress: 0 };
+          } else {
+            brott.task = { kind: 'clean', targetId: struct.id, progress: 0 };
+          }
         } else if (struct?.kind === 'charger') {
           brott.task = { kind: 'recharge', targetId: struct.id, progress: 0 };
+        } else if (struct?.kind === 'intake') {
+          if (struct.health < 0.8) {
+            brott.task = { kind: 'repair', targetId: struct.id, progress: 0 };
+          } else {
+            brott.task = { kind: 'idle', progress: 0 };
+          }
         } else if (debris) {
           brott.task = { kind: 'collect', targetId: debris.id, progress: 0 };
         } else {
@@ -118,6 +129,17 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
       if (brott.energy >= 1) brott.task = { kind: 'idle', progress: 0 };
       break;
     }
+    case 'repair': {
+      const struct = world.structures.find(s => s.id === brott.task.targetId);
+      if (!struct) { brott.task = { kind: 'idle', progress: 0 }; break; }
+      struct.health = Math.min(1, struct.health + config.repairRate);
+      brott.energy = Math.max(0, brott.energy - config.brottEnergyDrainPerTick);
+      if (struct.health >= 1) {
+        struct.health = 1;
+        brott.task = { kind: 'idle', progress: 0 };
+      }
+      break;
+    }
     case 'collect': {
       brott.task.progress += 1 / config.collectDuration;
       brott.energy = Math.max(0, brott.energy - config.brottEnergyDrainPerTick);
@@ -139,6 +161,8 @@ function stepGenerators(world: World, _config: SimConfig): void {
   const cap = _config.batteryCapacity;
   for (const s of world.structures) {
     if (s.kind !== 'tidal_generator') continue;
+    // Dormant generators (health < 0.8) don't accrue fouling and produce no output.
+    if (s.health < 0.8) continue;
     s.fouling = Math.min(1, s.fouling + _config.foulingRatePerTick);
     // Output scales with (1 - fouling) * health
     const out = s.outputBase * (1 - s.fouling) * s.health;
@@ -161,6 +185,8 @@ function maybeSpawnDebris(world: World, config: SimConfig, rng: Rng): void {
   if (rng() < config.debrisSpawnChance) {
     const intake = world.structures.find(s => s.kind === 'intake');
     if (!intake) return;
+    // No debris flow until the intake is brought online.
+    if (intake.health < 0.8) return;
     // Spawn near intake with small jitter
     const id = `debris-${world.tick}-${Math.floor(rng() * 1e6)}`;
     world.debris.push({
@@ -185,6 +211,7 @@ function recordIdleSample(world: World): void {
 export function runAutoBuildPolicy(world: World, config: SimConfig): void {
   const p = config.autoBuild;
   if (!p || !p.enabled) return;
+  if (world.phase === 'recovery') return;
   if (world.tick - world.lastBuildTick < p.buildCooldownTicks) return;
 
   // Skip while utilization is too low (brotts mostly idle).
@@ -220,7 +247,19 @@ export function tick(world: World, config: SimConfig, rng: Rng): void {
   stepGenerators(world, config);
   for (const b of world.brotts) stepBrott(world, b, config);
   recordIdleSample(world);
+  maybeTransitionPhase(world);
   runAutoBuildPolicy(world, config);
+}
+
+function maybeTransitionPhase(world: World): void {
+  if (world.phase !== 'recovery') return;
+  const charger = world.structures.find(s => s.id === 'charger-1');
+  const gen = world.structures.find(s => s.id === 'tidal-1');
+  const intake = world.structures.find(s => s.id === 'intake-1');
+  if (!charger || !gen || !intake) return;
+  if (charger.health >= 0.8 && gen.health >= 0.8 && intake.health >= 0.8) {
+    world.phase = 'operations';
+  }
 }
 
 export function run(world: World, config: SimConfig, rng: Rng, ticks: number): void {
@@ -312,7 +351,7 @@ export function buildBrott(world: World): string | null {
     name,
     pos: { x: charger.pos.x, y: charger.pos.y },
     energy: 1,
-    capabilities: ['clean', 'recharge', 'collect'],
+    capabilities: ['clean', 'recharge', 'collect', 'repair'],
     task: { kind: 'idle', progress: 0 },
     job: 'auto',
   });

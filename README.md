@@ -28,6 +28,8 @@ Multiple Brotts (up to 4) operating one or more tidal generators, with per-Brott
 
 Salvage is a visible counter with no use yet. Milestone 2 spends salvage to build a second generator — first real progression beat.
 
+**Phase 1 (recovery):** sim opens with a dormant outpost — generator and water intake at 0 health, charger online. The starter Brott repairs structures (**repair** is a fourth verb, available from day 1 on the starter Brott) until all three starter structures hit health ≥ 0.8. At that point the world transitions to Phase 2 (ongoing ops): generator starts producing, debris starts spawning, build buttons unlock, and auto-build (when enabled) starts firing. With the default seed this transition happens around tick ~545.
+
 ## Architecture
 
 ```
