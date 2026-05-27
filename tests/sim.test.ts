@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createWorld, run, tick } from '../src/sim/world';
+import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST } from '../src/sim/world';
 
 describe('sim core', () => {
   it('is deterministic given the same seed', () => {
@@ -45,6 +45,54 @@ describe('sim core', () => {
     run(world, config, rng, 20_000);
     expect(world.metrics.debrisCollected).toBeGreaterThan(0);
     expect(world.inventory.salvage).toBe(world.metrics.debrisCollected);
+  });
+
+  it('buildTidalGenerator fails without enough salvage', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = TIDAL_GENERATOR_COST - 1;
+    const id = buildTidalGenerator(world);
+    expect(id).toBeNull();
+    expect(world.inventory.salvage).toBe(TIDAL_GENERATOR_COST - 1);
+    expect(world.structures.filter(s => s.kind === 'tidal_generator').length).toBe(1);
+  });
+
+  it('buildTidalGenerator spends salvage and adds a generator', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = TIDAL_GENERATOR_COST + 10;
+    const id = buildTidalGenerator(world);
+    expect(id).not.toBeNull();
+    expect(world.inventory.salvage).toBe(10);
+    const gens = world.structures.filter(s => s.kind === 'tidal_generator');
+    expect(gens.length).toBe(2);
+    expect(gens[1].id).toBe(id);
+    expect(gens[1].fouling).toBe(0);
+    expect(gens[1].outputBase).toBe(100);
+    // Placed further along shoreline
+    expect(gens[1].pos.y).toBeGreaterThan(gens[0].pos.y);
+  });
+
+  it('brott cleans the dirtiest generator when multiple exist', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    world.inventory.salvage = TIDAL_GENERATOR_COST;
+    const id2 = buildTidalGenerator(world)!;
+    const gens = world.structures.filter(s => s.kind === 'tidal_generator');
+    const g1 = gens.find(g => g.id !== id2)!;
+    const g2 = gens.find(g => g.id === id2)!;
+    // Make g2 dirtier; force brott idle.
+    g1.fouling = 0.6;
+    g2.fouling = 0.9;
+    world.brotts[0].task = { kind: 'idle', progress: 0 };
+    world.brotts[0].energy = 1;
+    // One tick to pick a task.
+    tick(world, config, rng);
+    expect(world.brotts[0].task.targetId).toBe(g2.id);
+  });
+
+  it('sim module exports do not touch the DOM', () => {
+    // Importing world/buildTidalGenerator under node would throw if it touched DOM.
+    const { world } = createWorld({ seed: 1 });
+    world.inventory.salvage = TIDAL_GENERATOR_COST;
+    expect(() => buildTidalGenerator(world)).not.toThrow();
   });
 
   it('sim has no DOM dependencies (runs under node)', () => {

@@ -2,6 +2,11 @@
 // (via callbacks) world entity names. Keeps the sim DOM-free.
 
 import { World, Brott, Structure } from '../sim/types';
+import { buildTidalGenerator, TIDAL_GENERATOR_COST } from '../sim/world';
+
+export interface DashboardCallbacks {
+  onBuildGenerator?: (newId: string) => void;
+}
 
 type RowCache = {
   el: HTMLLIElement;
@@ -18,7 +23,10 @@ type StructRowCache = {
   id: string;
 };
 
-export function initDashboard(world: World): { update: () => void } {
+export function initDashboard(world: World, callbacks: DashboardCallbacks = {}): {
+  update: () => void;
+} {
+  // Metric fields
   const elTick = document.getElementById('m-tick')!;
   const elPower = document.getElementById('m-power')!;
   const elSalvage = document.getElementById('m-salvage')!;
@@ -29,10 +37,26 @@ export function initDashboard(world: World): { update: () => void } {
   const brottList = document.getElementById('brott-list') as HTMLUListElement;
   const structList = document.getElementById('struct-list') as HTMLUListElement;
 
+  const buildBtn = document.getElementById('build-gen') as HTMLButtonElement;
+  const buildHint = document.getElementById('build-hint')!;
+  const log = document.getElementById('event-log') as HTMLDivElement;
+
+  let buildCount = 0;
+  buildBtn.addEventListener('click', () => {
+    const newId = buildTidalGenerator(world);
+    if (newId) {
+      buildCount += 1;
+      const n = world.structures.filter(s => s.kind === 'tidal_generator').length;
+      pushLog(log, `Built tidal generator #${n}`);
+      callbacks.onBuildGenerator?.(newId);
+    }
+  });
+
   const brottRows = new Map<string, RowCache>();
   const structRows = new Map<string, StructRowCache>();
 
   function update(): void {
+    // Metrics
     elTick.textContent = String(world.tick);
     elPower.textContent = `${(world.inventory.power ?? 0).toFixed(0)} kWh`;
     elSalvage.textContent = String(world.inventory.salvage ?? 0);
@@ -47,8 +71,21 @@ export function initDashboard(world: World): { update: () => void } {
     elEnergy.textContent = b0 ? `${(b0.energy * 100).toFixed(0)}%` : '—';
     elTask.textContent = b0 ? b0.task.kind : '—';
 
+    // Brott rows
     syncBrottRows(brottList, world.brotts, brottRows);
+
+    // Structure rows
     syncStructureRows(structList, world.structures, structRows);
+
+    // Build button
+    const canAfford = (world.inventory.salvage ?? 0) >= TIDAL_GENERATOR_COST;
+    buildBtn.disabled = !canAfford;
+    if (canAfford) {
+      buildHint.textContent = `Ready to build (cost ${TIDAL_GENERATOR_COST} salvage)`;
+    } else {
+      const need = TIDAL_GENERATOR_COST - (world.inventory.salvage ?? 0);
+      buildHint.textContent = `Need ${need} more salvage`;
+    }
   }
 
   return { update };
@@ -68,11 +105,13 @@ function syncBrottRows(
       cache.set(b.id, row);
       list.appendChild(row.el);
     }
+    // Update text only if not currently being edited
     if (!row.nameEl.classList.contains('editing')) {
       if (row.nameEl.textContent !== b.name) row.nameEl.textContent = b.name;
     }
     row.metaEl.textContent = `${(b.energy * 100).toFixed(0)}%  ${b.task.kind}`;
   }
+  // Remove rows for departed brotts
   for (const [id, row] of cache) {
     if (!seen.has(id)) {
       row.el.remove();
@@ -214,4 +253,14 @@ function statusFor(s: Structure): string {
   if (s.kind === 'charger') return 'Active';
   if (s.kind === 'intake') return 'Idle';
   return 'Idle';
+}
+
+function pushLog(log: HTMLDivElement, msg: string): void {
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.textContent = msg;
+  log.appendChild(line);
+  // Cap at 8 lines
+  while (log.childNodes.length > 8) log.removeChild(log.firstChild!);
+  log.scrollTop = log.scrollHeight;
 }

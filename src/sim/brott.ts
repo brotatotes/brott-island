@@ -37,9 +37,14 @@ export function decideTask(world: World, brott: Brott, config: SimConfig): Brott
 
   // Idle: pick a priority
   const gens = structuresOfKind(world, 'tidal_generator');
-  const dirty = gens.find(g => g.fouling >= config.highFoulingThreshold);
-  if (dirty) {
-    return { kind: 'walk', targetId: dirty.id, targetPos: dirty.pos, progress: 0 };
+  // Generalize for multiple generators: pick the dirtiest one above the threshold.
+  let dirtiest: Structure | undefined;
+  let dirtiestF = config.highFoulingThreshold;
+  for (const g of gens) {
+    if (g.fouling >= dirtiestF) { dirtiestF = g.fouling; dirtiest = g; }
+  }
+  if (dirtiest) {
+    return { kind: 'walk', targetId: dirtiest.id, targetPos: dirtiest.pos, progress: 0 };
   }
   if (world.debris.length > 0) {
     const d = nearest(brott.pos, world.debris)!;

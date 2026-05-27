@@ -169,3 +169,36 @@ export function tick(world: World, config: SimConfig, rng: Rng): void {
 export function run(world: World, config: SimConfig, rng: Rng, ticks: number): void {
   for (let i = 0; i < ticks; i++) tick(world, config, rng);
 }
+
+// --- Sim actions (called from UI; keep DOM-free) ---
+
+export const TIDAL_GENERATOR_COST = 50;
+
+/**
+ * Attempt to build a new tidal generator. Returns the new structure id on success, null on failure.
+ * Spends `TIDAL_GENERATOR_COST` salvage. Places the generator further along the shoreline
+ * from existing tidal generators, with a small offset so it doesn't overlap.
+ */
+export function buildTidalGenerator(world: World): string | null {
+  if ((world.inventory.salvage ?? 0) < TIDAL_GENERATOR_COST) return null;
+  world.inventory.salvage = (world.inventory.salvage ?? 0) - TIDAL_GENERATOR_COST;
+
+  // Place further along shoreline (y axis) from existing generators.
+  const existingGens = world.structures.filter(s => s.kind === 'tidal_generator');
+  const baseX = existingGens.length > 0 ? existingGens[0].pos.x : 28;
+  const maxY = existingGens.reduce((m, s) => Math.max(m, s.pos.y), 0);
+  const newPos = { x: baseX, y: maxY + 6 };
+
+  const n = existingGens.length + 1;
+  const id = `tidal-${n}`;
+  world.structures.push({
+    id,
+    kind: 'tidal_generator',
+    pos: newPos,
+    tier: 1,
+    health: 1,
+    fouling: 0,
+    outputBase: 100,
+  });
+  return id;
+}
