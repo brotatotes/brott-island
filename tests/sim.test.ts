@@ -31,6 +31,13 @@ describe('sim core', () => {
     expect(world.inventory.power).toBeGreaterThan(0);
   });
 
+  it('battery caps stored power and overflow is delivered', () => {
+    const { world, rng, config } = createWorld({ seed: 7 });
+    run(world, config, rng, 20_000);
+    expect(world.inventory.power).toBeLessThanOrEqual(config.batteryCapacity + 0.001);
+    expect(world.metrics.totalPowerDelivered).toBeGreaterThan(0);
+  });
+
   it('brott returns to charger when low on energy', () => {
     const { world, rng, config } = createWorld({ seed: 3 });
     // Force low energy
@@ -67,8 +74,29 @@ describe('sim core', () => {
     expect(gens[1].id).toBe(id);
     expect(gens[1].fouling).toBe(0);
     expect(gens[1].outputBase).toBe(100);
-    // Placed further along shoreline
-    expect(gens[1].pos.y).toBeGreaterThan(gens[0].pos.y);
+    // Placed in canvas bounds (sim world is 40x25 tiles)
+    expect(gens[1].pos.x).toBeGreaterThanOrEqual(0);
+    expect(gens[1].pos.x).toBeLessThanOrEqual(40);
+    expect(gens[1].pos.y).toBeGreaterThanOrEqual(0);
+    expect(gens[1].pos.y).toBeLessThanOrEqual(25);
+    // Different from first generator's slot
+    expect(`${gens[1].pos.x},${gens[1].pos.y}`).not.toBe(`${gens[0].pos.x},${gens[0].pos.y}`);
+  });
+
+  it('generator placement stays within canvas bounds across many builds', () => {
+    const { world } = createWorld({ seed: 5 });
+    world.inventory.salvage = TIDAL_GENERATOR_COST * 20;
+    for (let i = 0; i < 20; i++) buildTidalGenerator(world);
+    const gens = world.structures.filter(s => s.kind === 'tidal_generator');
+    for (const g of gens) {
+      expect(g.pos.x).toBeGreaterThanOrEqual(0);
+      expect(g.pos.x).toBeLessThanOrEqual(40);
+      expect(g.pos.y).toBeGreaterThanOrEqual(0);
+      expect(g.pos.y).toBeLessThanOrEqual(25);
+    }
+    // No two generators in the same slot
+    const slots = new Set(gens.map(g => `${g.pos.x},${g.pos.y}`));
+    expect(slots.size).toBe(gens.length);
   });
 
   it('brott cleans the dirtiest generator when multiple exist', () => {

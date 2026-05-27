@@ -133,15 +133,23 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
 }
 
 function stepGenerators(world: World, _config: SimConfig): void {
+  const cap = _config.batteryCapacity;
   for (const s of world.structures) {
     if (s.kind !== 'tidal_generator') continue;
     s.fouling = Math.min(1, s.fouling + _config.foulingRatePerTick);
     // Output scales with (1 - fouling) * health
     const out = s.outputBase * (1 - s.fouling) * s.health;
     world.metrics.totalPowerGenerated += out;
-    // Day 1: power delivered = power generated (no buffer/loss yet)
-    world.metrics.totalPowerDelivered += out;
-    world.inventory.power = (world.inventory.power ?? 0) + out;
+    const before = world.inventory.power ?? 0;
+    const after = before + out;
+    if (after <= cap) {
+      world.inventory.power = after;
+    } else {
+      world.inventory.power = cap;
+      const overflow = after - cap;
+      // Overflow auto-transmits to mainland.
+      world.metrics.totalPowerDelivered += overflow;
+    }
     if (s.fouling < 0.01) world.metrics.ticksAtFullOutput += 1;
   }
 }
@@ -174,27 +182,44 @@ export function run(world: World, config: SimConfig, rng: Rng, ticks: number): v
 
 export const TIDAL_GENERATOR_COST = 50;
 
+// Canvas is 640x400 at TILE=16 → 40x25 tile world. Shore at x=24.
+// Generator slots: columns at x=28 and x=34 (in water), y rows spaced 6 apart
+// within visible bounds [y=2..23]. First slot matches the seeded generator.
+const GENERATOR_SLOTS: { x: number; y: number }[] = [
+  { x: 28, y: 14 },
+  { x: 28, y: 8 },
+  { x: 28, y: 20 },
+  { x: 34, y: 11 },
+  { x: 34, y: 17 },
+  { x: 34, y: 5 },
+  { x: 34, y: 23 },
+];
+
 /**
  * Attempt to build a new tidal generator. Returns the new structure id on success, null on failure.
- * Spends `TIDAL_GENERATOR_COST` salvage. Places the generator further along the shoreline
- * from existing tidal generators, with a small offset so it doesn't overlap.
+ * Spends `TIDAL_GENERATOR_COST` salvage. Places the generator in the next unoccupied slot
+ * inside the visible canvas bounds. Returns null if salvage insufficient OR no slots free.
  */
 export function buildTidalGenerator(world: World): string | null {
   if ((world.inventory.salvage ?? 0) < TIDAL_GENERATOR_COST) return null;
+
+  // Find first unoccupied slot.
+  const occupied = new Set(
+    world.structures
+      .filter(s => s.kind === 'tidal_generator')
+      .map(s => `${s.pos.x},${s.pos.y}`),
+  );
+  const slot = GENERATOR_SLOTS.find(s => !occupied.has(`${s.x},${s.y}`));
+  if (!slot) return null;
+
   world.inventory.salvage = (world.inventory.salvage ?? 0) - TIDAL_GENERATOR_COST;
 
-  // Place further along shoreline (y axis) from existing generators.
-  const existingGens = world.structures.filter(s => s.kind === 'tidal_generator');
-  const baseX = existingGens.length > 0 ? existingGens[0].pos.x : 28;
-  const maxY = existingGens.reduce((m, s) => Math.max(m, s.pos.y), 0);
-  const newPos = { x: baseX, y: maxY + 6 };
-
-  const n = existingGens.length + 1;
+  const n = world.structures.filter(s => s.kind === 'tidal_generator').length + 1;
   const id = `tidal-${n}`;
   world.structures.push({
     id,
     kind: 'tidal_generator',
-    pos: newPos,
+    pos: { x: slot.x, y: slot.y },
     tier: 1,
     health: 1,
     fouling: 0,
@@ -202,3 +227,5 @@ export function buildTidalGenerator(world: World): string | null {
   });
   return id;
 }
+
+export const MAX_TIDAL_GENERATORS = GENERATOR_SLOTS.length;

@@ -2,7 +2,8 @@
 // (via callbacks) world entity names. Keeps the sim DOM-free.
 
 import { World, Brott, Structure } from '../sim/types';
-import { buildTidalGenerator, TIDAL_GENERATOR_COST } from '../sim/world';
+import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS } from '../sim/world';
+import { DEFAULT_CONFIG } from '../sim/types';
 
 export interface DashboardCallbacks {
   onBuildGenerator?: (newId: string) => void;
@@ -29,6 +30,7 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   // Metric fields
   const elTick = document.getElementById('m-tick')!;
   const elPower = document.getElementById('m-power')!;
+  const elDelivered = document.getElementById('m-delivered')!;
   const elSalvage = document.getElementById('m-salvage')!;
   const elFouling = document.getElementById('m-fouling')!;
   const elEnergy = document.getElementById('m-energy')!;
@@ -58,7 +60,10 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   function update(): void {
     // Metrics
     elTick.textContent = String(world.tick);
-    elPower.textContent = `${(world.inventory.power ?? 0).toFixed(0)} kWh`;
+    const cap = DEFAULT_CONFIG.batteryCapacity;
+    const stored = world.inventory.power ?? 0;
+    elPower.textContent = `${stored.toFixed(0)} / ${cap} kWh`;
+    elDelivered.textContent = `${world.metrics.totalPowerDelivered.toFixed(0)} kWh`;
     elSalvage.textContent = String(world.inventory.salvage ?? 0);
 
     const gens = world.structures.filter(s => s.kind === 'tidal_generator');
@@ -78,9 +83,13 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
     syncStructureRows(structList, world.structures, structRows);
 
     // Build button
+    const gensCount = world.structures.filter(s => s.kind === 'tidal_generator').length;
+    const slotsFull = gensCount >= MAX_TIDAL_GENERATORS;
     const canAfford = (world.inventory.salvage ?? 0) >= TIDAL_GENERATOR_COST;
-    buildBtn.disabled = !canAfford;
-    if (canAfford) {
+    buildBtn.disabled = !canAfford || slotsFull;
+    if (slotsFull) {
+      buildHint.textContent = `All generator slots full (${MAX_TIDAL_GENERATORS})`;
+    } else if (canAfford) {
       buildHint.textContent = `Ready to build (cost ${TIDAL_GENERATOR_COST} salvage)`;
     } else {
       const need = TIDAL_GENERATOR_COST - (world.inventory.salvage ?? 0);

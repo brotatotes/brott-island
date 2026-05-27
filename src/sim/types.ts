@@ -69,6 +69,7 @@ export interface SimConfig {
   debrisSpawnChance: number;      // per tick, 0..1
   lowEnergyThreshold: number;     // brott returns to charge below this
   highFoulingThreshold: number;   // brott prioritizes cleaning above this
+  batteryCapacity: number;        // max kWh stored locally; overflow goes to delivered
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -78,6 +79,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   cleanRate: 0.015,
   collectDuration: 40,
   foulingRatePerTick: 0.0008,
+  batteryCapacity: 500,
   debrisSpawnChance: 0.004,
   lowEnergyThreshold: 0.25,
   highFoulingThreshold: 0.5,
