@@ -6,18 +6,18 @@ import { decideTask } from './brott';
 
 /**
  * Deterministic wind multiplier for the given tick.
- * Returns a value in [0.1, 1.0]. Mean is roughly 0.5 over long horizons —
- * wind turbines produce ~half the throughput of an equally-rated tidal
- * generator on average, but with high variance (intermittency is the point).
+ * Returns a value in [0.1, ~1.0]. Mean is `mean` over long horizons (default 0.5).
+ * Wind turbines are intermittent — high variance is the point. Tuning the
+ * mean lets us shift the wind/tidal trade-off without touching the sine pattern.
  */
-export function windFactor(tick: number): number {
+export function windFactor(tick: number, mean: number = 0.5): number {
   const TWO_PI = Math.PI * 2;
   // Two sine components: a slow ~700-tick weather cycle plus a faster ~137-tick gust pattern.
   const slow = Math.sin((tick / 700) * TWO_PI);
   const fast = Math.sin((tick / 137) * TWO_PI + 1.3);
-  const raw = 0.5 + 0.3 * slow + 0.2 * fast;
+  const raw = mean + 0.3 * slow + 0.2 * fast;
   if (raw < 0.1) return 0.1;
-  if (raw > 1.0) return 1.0;
+  if (raw > 1.2) return 1.2;
   return raw;
 }
 
@@ -70,6 +70,7 @@ export function createWorld(opts: SimOptions = {}): { world: World; rng: Rng; co
     },
     lastBuildTick: 0,
     brottIdleHistory: [],
+    events: [],
   };
 
   return { world, rng, config };
@@ -182,7 +183,7 @@ function stepGenerators(world: World, _config: SimConfig): void {
     if (s.health < 0.8) continue;
     s.fouling = Math.min(1, s.fouling + _config.foulingRatePerTick);
     // Output scales with (1 - fouling) * health, and — for wind turbines — wind factor.
-    const envFactor = s.kind === 'wind_turbine' ? windFactor(world.tick) : 1;
+    const envFactor = s.kind === 'wind_turbine' ? windFactor(world.tick, _config.windMeanFactor) : 1;
     const out = s.outputBase * (1 - s.fouling) * s.health * envFactor;
     world.metrics.totalPowerGenerated += out;
     const before = world.inventory.power ?? 0;
@@ -249,9 +250,9 @@ export function runAutoBuildPolicy(world: World, config: SimConfig): void {
   let id: string | null;
   if (preferBrott) {
     id = buildBrott(world);
-    if (id === null) id = buildAnyGenerator(world, p);
+    if (id === null) id = buildAnyGenerator(world, p, config);
   } else {
-    id = buildAnyGenerator(world, p);
+    id = buildAnyGenerator(world, p, config);
     if (id === null) id = buildBrott(world);
   }
   if (id !== null) {
@@ -259,9 +260,35 @@ export function runAutoBuildPolicy(world: World, config: SimConfig): void {
   }
 }
 
+function maybeStorm(world: World, config: SimConfig, rng: Rng): void {
+  if (rng() >= config.stormChancePerTick) return;
+  // Storm event: each wind turbine has an independent chance of being hit.
+  // Damage scales with fleet size (more turbines = more exposure), which is
+  // the strategic counter to all-wind builds: storms become unmanageable when
+  // the brotts can't keep up with repairs. Tidal generators are offshore +
+  // submerged so they're unaffected by storms.
+  const winds = world.structures.filter(s => s.kind === 'wind_turbine');
+  if (winds.length === 0) return;
+  let anyHit = false;
+  for (const target of winds) {
+    if (rng() >= config.stormTurbineHitChance) continue;
+    const span = config.stormDamageMax - config.stormDamageMin;
+    const dmg = config.stormDamageMin + rng() * span;
+    target.health = Math.max(0, target.health - dmg);
+    world.events.push({ tick: world.tick, kind: 'storm', targetId: target.id, magnitude: dmg });
+    anyHit = true;
+  }
+  // Log a single 'storm' event if nothing was hit so storm frequency is observable.
+  if (!anyHit) {
+    world.events.push({ tick: world.tick, kind: 'storm', targetId: '', magnitude: 0 });
+  }
+  if (world.events.length > 1000) world.events.splice(0, world.events.length - 1000);
+}
+
 export function tick(world: World, config: SimConfig, rng: Rng): void {
   world.tick += 1;
   maybeSpawnDebris(world, config, rng);
+  maybeStorm(world, config, rng);
   stepGenerators(world, config);
   for (const b of world.brotts) stepBrott(world, b, config);
   recordIdleSample(world);
@@ -399,8 +426,10 @@ export function buildBrott(world: World): string | null {
 //     - All-wind: cheaper to scale + more units, but intermittency drags mean.
 //     - Mixed: best of both \u2014 wind fills cheap capacity while tidal anchors baseline.
 
-export const WIND_TURBINE_COST = 35;
-export const WIND_TURBINE_BASE_OUTPUT = 120;
+// Legacy compile-time constants; the live values come from SimConfig.windCost /
+// SimConfig.windBaseOutput. Kept exported so existing imports/tests still build.
+export const WIND_TURBINE_COST = 30;
+export const WIND_TURBINE_BASE_OUTPUT = 320;
 
 // Wind turbines live on land (x < SHORE_TILE_X=24). 14 slots scattered across the\n// island so they don't collide with the charger (x=8, y=10) or each other.
 const WIND_TURBINE_SLOTS: { x: number; y: number }[] = [
@@ -426,8 +455,9 @@ export const MAX_WIND_TURBINES = WIND_TURBINE_SLOTS.length;
  * Attempt to build a new wind turbine. Returns id on success, null on failure.
  * Spends `WIND_TURBINE_COST` salvage. Places at next unoccupied land slot.
  */
-export function buildWindTurbine(world: World): string | null {
-  if ((world.inventory.salvage ?? 0) < WIND_TURBINE_COST) return null;
+export function buildWindTurbine(world: World, config: SimConfig = DEFAULT_CONFIG): string | null {
+  const cost = config.windCost;
+  if ((world.inventory.salvage ?? 0) < cost) return null;
 
   const occupied = new Set(
     world.structures
@@ -437,7 +467,7 @@ export function buildWindTurbine(world: World): string | null {
   const slot = WIND_TURBINE_SLOTS.find(s => !occupied.has(`${s.x},${s.y}`));
   if (!slot) return null;
 
-  world.inventory.salvage = (world.inventory.salvage ?? 0) - WIND_TURBINE_COST;
+  world.inventory.salvage = (world.inventory.salvage ?? 0) - cost;
 
   const n = world.structures.filter(s => s.kind === 'wind_turbine').length + 1;
   const id = `wind-${n}`;
@@ -448,7 +478,7 @@ export function buildWindTurbine(world: World): string | null {
     tier: 1,
     health: 1,
     fouling: 0,
-    outputBase: WIND_TURBINE_BASE_OUTPUT,
+    outputBase: config.windBaseOutput,
   });
   return id;
 }
@@ -459,7 +489,11 @@ export function buildWindTurbine(world: World): string | null {
  * windRatio=0 \u2192 always tidal; windRatio=1 \u2192 always wind; 0.5 \u2192 balanced.
  * Falls back to the other type if the preferred type can't build (slots full or unaffordable).
  */
-export function buildAnyGenerator(world: World, policy: { windRatio?: number }): string | null {
+export function buildAnyGenerator(
+  world: World,
+  policy: { windRatio?: number },
+  config: SimConfig = DEFAULT_CONFIG,
+): string | null {
   const windRatio = policy.windRatio ?? 0;
   const winds = world.structures.filter(s => s.kind === 'wind_turbine').length;
   const tidals = world.structures.filter(s => s.kind === 'tidal_generator').length;
@@ -469,11 +503,11 @@ export function buildAnyGenerator(world: World, policy: { windRatio?: number }):
 
   if (preferWind) {
     const windSlotsFull = winds >= MAX_WIND_TURBINES;
-    if (!windSlotsFull) return buildWindTurbine(world);
+    if (!windSlotsFull) return buildWindTurbine(world, config);
     return buildTidalGenerator(world);
   } else {
     const tidalSlotsFull = tidals >= MAX_TIDAL_GENERATORS;
     if (!tidalSlotsFull) return buildTidalGenerator(world);
-    return buildWindTurbine(world);
+    return buildWindTurbine(world, config);
   }
 }

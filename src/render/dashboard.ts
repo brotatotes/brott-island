@@ -50,6 +50,7 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   const buildWindBtn = document.getElementById('build-wind') as HTMLButtonElement;
   const buildWindHint = document.getElementById('build-wind-hint')!;
   const log = document.getElementById('event-log') as HTMLDivElement;
+  let lastSeenStormTick = -1;
 
   let buildCount = 0;
   buildBtn.addEventListener('click', () => {
@@ -140,7 +141,22 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
       buildBrottHint.textContent = `Need ${needB} more salvage`;
     }
 
+    // Surface storm events as log entries (one line per affected turbine).
+    for (const e of world.events) {
+      if (e.kind !== 'storm') continue;
+      if (e.tick <= lastSeenStormTick) continue;
+      if (e.targetId === '') {
+        pushLog(log, `⚡ Storm passed over the island (no turbines hit)`);
+      } else {
+        pushLog(log, `⚡ Storm damaged ${e.targetId} (-${(e.magnitude * 100).toFixed(0)}% health)`);
+      }
+    }
+    if (world.events.length > 0) {
+      lastSeenStormTick = Math.max(lastSeenStormTick, ...world.events.map(e => e.tick));
+    }
+
     // Build Wind Turbine button
+
     const windCount = world.structures.filter(s => s.kind === 'wind_turbine').length;
     const windFull = windCount >= MAX_WIND_TURBINES;
     const canAffordWind = (world.inventory.salvage ?? 0) >= WIND_TURBINE_COST;

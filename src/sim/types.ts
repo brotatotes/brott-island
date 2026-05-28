@@ -55,6 +55,13 @@ export interface Debris {
 
 export type Inventory = Record<string, number>;
 
+export interface SimEvent {
+  tick: number;
+  kind: 'storm';
+  targetId: string;
+  magnitude: number;
+}
+
 export interface World {
   tick: number;
   phase: Phase;                // 'recovery' until starter structures repaired, then 'operations'
@@ -72,6 +79,7 @@ export interface World {
   // Auto-build bookkeeping (deterministic; populated even when policy disabled)
   lastBuildTick: number;
   brottIdleHistory: number[];  // ring buffer, 0/1 per tick — "was any brott idle this tick"
+  events: SimEvent[];          // recent sim events (storms, etc.); capped ring buffer
 }
 
 export interface AutoBuildPolicy {
@@ -95,6 +103,16 @@ export interface SimConfig {
   lowEnergyThreshold: number;     // brott returns to charge below this
   highFoulingThreshold: number;   // brott prioritizes cleaning above this
   batteryCapacity: number;        // max kWh stored locally; overflow goes to delivered
+  // Wind tunables (Phase B). Defaults give wind a meaningful niche
+  // (cheap-to-scale + storm-vulnerable) without strictly dominating tidal.
+  windBaseOutput: number;         // wind turbine nominal kW (was hard-coded 120)
+  windCost: number;               // salvage cost per wind turbine
+  windMeanFactor: number;         // mean of windFactor() over long horizons (~0.5)
+  // Storm damage (Phase B). Wind turbines occasionally take direct health hits.
+  stormChancePerTick: number;     // probability of a storm event per tick (0..1)
+  stormDamageMin: number;         // min health damage per affected turbine
+  stormDamageMax: number;         // max health damage per affected turbine
+  stormTurbineHitChance: number;  // per-turbine probability of being hit during a storm
   autoBuild?: AutoBuildPolicy;    // optional automatic salvage spend (off by default)
 }
 
@@ -110,6 +128,17 @@ export const DEFAULT_CONFIG: SimConfig = {
   debrisSpawnChance: 0.012,
   lowEnergyThreshold: 0.25,
   highFoulingThreshold: 0.5,
+  windBaseOutput: 320,
+  windCost: 30,
+  windMeanFactor: 0.7,
+  // Storm: ~1 event per ~1250 ticks (~40 per 50k-tick run). Each storm checks every wind
+  // turbine independently at 95% hit chance, damaging in [0.05, 0.18]. Brott repair verb
+  // restores health. Balance: balanced-mix (windRatio=0.5) beats baseline by ~7% with
+  // higher variance; wind-only is high-output but risky (large fleets get hammered per storm).
+  stormChancePerTick: 0.0008,
+  stormDamageMin: 0.05,
+  stormDamageMax: 0.18,
+  stormTurbineHitChance: 0.95,
   autoBuild: {
     enabled: false,
     brottPerGenTarget: 1.0,

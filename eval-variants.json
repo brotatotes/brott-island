@@ -44,19 +44,41 @@
     "config": { "foulingRatePerTick": 0.0016 }
   },
   {
-    "name": "wind-heavy",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.8 }
+    "name": "wind-r00-allTidal",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.0 }
   },
   {
-    "name": "wind-only",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 }
-  },
-  {
-    "name": "tidal-heavy",
+    "name": "wind-r02-tidalHeavy",
     "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.2 }
   },
   {
-    "name": "balanced-mix",
+    "name": "wind-r03",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.3 }
+  },
+  {
+    "name": "wind-r05-balanced",
     "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5 }
+  },
+  {
+    "name": "wind-r07",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.7 }
+  },
+  {
+    "name": "wind-r08-windHeavy",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.8 }
+  },
+  {
+    "name": "wind-r10-allWind",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 }
+  },
+  {
+    "name": "wind-r05-noStorms",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5 },
+    "config": { "stormChancePerTick": 0 }
+  },
+  {
+    "name": "wind-r10-noStorms",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 },
+    "config": { "stormChancePerTick": 0 }
   }
 ]

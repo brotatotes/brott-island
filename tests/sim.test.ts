@@ -542,10 +542,10 @@ describe('wind turbine', () => {
   });
 
   it('brott repairs broken wind turbine in recovery-style scenario', () => {
-    const { world, rng, config } = createWorld({ seed: 5 });
+    const { world, rng, config } = createWorld({ seed: 5, config: { stormChancePerTick: 0 } });
     skipRecovery(world);
     world.inventory.salvage = WIND_TURBINE_COST;
-    const id = buildWindTurbine(world)!;
+    const id = buildWindTurbine(world, config)!;
     const w = world.structures.find(s => s.id === id)!;
     w.health = 0.3;
     world.brotts[0].energy = 1;
@@ -592,5 +592,98 @@ describe('wind turbine', () => {
     expect(tidals).toBeGreaterThan(0);
     // Within +/-2 of half
     expect(Math.abs(winds - tidals)).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('storm damage', () => {
+  it('storms only damage wind turbines, never tidal', () => {
+    // Crank storm chance so we get many events deterministically over 50k ticks.
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { stormChancePerTick: 0.05, stormTurbineHitChance: 1.0, stormDamageMin: 0.1, stormDamageMax: 0.2, repairRate: 0 },
+    });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST * 3;
+    buildWindTurbine(world, config);
+    buildWindTurbine(world, config);
+    // Snapshot tidal health, then run.
+    const tidalIds = world.structures.filter(s => s.kind === 'tidal_generator').map(s => s.id);
+    // Disable brotts so no repair happens.
+    world.brotts = [];
+    for (let i = 0; i < 200; i++) tick(world, config, rng);
+    const stormEvents = world.events.filter(e => e.kind === 'storm');
+    expect(stormEvents.length).toBeGreaterThan(0);
+    // All storm targets are wind turbines (or the no-hit sentinel with empty targetId).
+    for (const e of stormEvents) {
+      if (e.targetId === '') continue;
+      const t = world.structures.find(s => s.id === e.targetId);
+      expect(t?.kind).toBe('wind_turbine');
+    }
+    // Tidals untouched.
+    for (const id of tidalIds) {
+      const t = world.structures.find(s => s.id === id)!;
+      expect(t.health).toBe(1);
+    }
+  });
+
+  it('storms cause measurable wind turbine health loss', () => {
+    const { world, rng, config } = createWorld({
+      seed: 7,
+      config: { stormChancePerTick: 0.02, stormTurbineHitChance: 1.0, stormDamageMin: 0.05, stormDamageMax: 0.1, repairRate: 0 },
+    });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST;
+    const id = buildWindTurbine(world, config)!;
+    world.brotts = [];
+    const w = world.structures.find(s => s.id === id)!;
+    const h0 = w.health;
+    for (let i = 0; i < 1000; i++) tick(world, config, rng);
+    expect(w.health).toBeLessThan(h0);
+  });
+
+  it('storms do nothing when no wind turbines exist', () => {
+    const { world, rng, config } = createWorld({
+      seed: 5,
+      config: { stormChancePerTick: 0.1, stormTurbineHitChance: 1.0 },
+    });
+    skipRecovery(world);
+    // No wind turbines in starter world; just tidal + charger + intake.
+    for (let i = 0; i < 100; i++) tick(world, config, rng);
+    const stormEvents = world.events.filter(e => e.kind === 'storm');
+    expect(stormEvents.length).toBe(0);
+  });
+
+  it('brotts repair storm-damaged wind turbines', () => {
+    const { world, rng, config } = createWorld({
+      seed: 11,
+      config: { stormChancePerTick: 0, repairRate: 0.02 },
+    });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST;
+    const id = buildWindTurbine(world, config)!;
+    const w = world.structures.find(s => s.id === id)!;
+    // Simulate a heavy storm hit.
+    w.health = 0.4;
+    world.brotts[0].energy = 1;
+    world.brotts[0].task = { kind: 'idle', progress: 0 };
+    for (let i = 0; i < 1500; i++) tick(world, config, rng);
+    expect(w.health).toBeGreaterThan(0.95);
+  });
+
+  it('storm frequency matches expected rate over long horizon', () => {
+    // Use chance=0.01 → ~10 storms per 1000 ticks.
+    const { world, rng, config } = createWorld({
+      seed: 13,
+      config: { stormChancePerTick: 0.01, stormTurbineHitChance: 0, stormDamageMin: 0, stormDamageMax: 0 },
+    });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST;
+    buildWindTurbine(world, config);
+    world.brotts = [];
+    for (let i = 0; i < 5000; i++) tick(world, config, rng);
+    const stormEvents = world.events.filter(e => e.kind === 'storm');
+    // ~50 expected (5000 * 0.01); allow generous slack for RNG.
+    expect(stormEvents.length).toBeGreaterThan(25);
+    expect(stormEvents.length).toBeLessThan(80);
   });
 });
