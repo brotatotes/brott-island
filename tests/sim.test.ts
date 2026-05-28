@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST, buildBrott, BROTT_COST, MAX_BROTTS } from '../src/sim/world';
+import { createWorld, run, tick, buildTidalGenerator, TIDAL_GENERATOR_COST, buildBrott, BROTT_COST, MAX_BROTTS, buildWindTurbine, WIND_TURBINE_COST, WIND_TURBINE_BASE_OUTPUT, MAX_WIND_TURBINES, buildAnyGenerator, windFactor } from '../src/sim/world';
 
 // Helper: bring the seeded outpost to operations phase instantly for tests that
 // don't care about Phase 1.
@@ -449,5 +449,148 @@ describe('phase 1 recovery', () => {
     gen.health = 0.8;
     run(world, config, rng, 100);
     expect(world.metrics.totalPowerGenerated).toBeGreaterThan(0);
+  });
+});
+
+describe('wind turbine', () => {
+  it('windFactor is bounded and deterministic', () => {
+    for (let t = 0; t < 5000; t++) {
+      const w = windFactor(t);
+      expect(w).toBeGreaterThanOrEqual(0.1);
+      expect(w).toBeLessThanOrEqual(1.0);
+    }
+    expect(windFactor(123)).toBe(windFactor(123));
+  });
+
+  it('windFactor mean over a full cycle is roughly 0.5', () => {
+    let sum = 0;
+    const N = 10_000;
+    for (let t = 0; t < N; t++) sum += windFactor(t);
+    const mean = sum / N;
+    expect(mean).toBeGreaterThan(0.45);
+    expect(mean).toBeLessThan(0.65);
+  });
+
+  it('buildWindTurbine fails without enough salvage', () => {
+    const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST - 1;
+    const id = buildWindTurbine(world);
+    expect(id).toBeNull();
+    expect(world.structures.filter(s => s.kind === 'wind_turbine').length).toBe(0);
+  });
+
+  it('buildWindTurbine places turbine on land (x < shore) with full health', () => {
+    const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST + 10;
+    const id = buildWindTurbine(world);
+    expect(id).not.toBeNull();
+    expect(world.inventory.salvage).toBe(10);
+    const w = world.structures.find(s => s.id === id)!;
+    expect(w.kind).toBe('wind_turbine');
+    expect(w.pos.x).toBeLessThan(24); // shore tile
+    expect(w.health).toBe(1);
+    expect(w.fouling).toBe(0);
+    expect(w.outputBase).toBe(WIND_TURBINE_BASE_OUTPUT);
+  });
+
+  it('wind turbine slots are unique and capped', () => {
+    const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST * (MAX_WIND_TURBINES + 5);
+    for (let i = 0; i < MAX_WIND_TURBINES + 5; i++) buildWindTurbine(world);
+    const ws = world.structures.filter(s => s.kind === 'wind_turbine');
+    expect(ws.length).toBe(MAX_WIND_TURBINES);
+    const slots = new Set(ws.map(w => `${w.pos.x},${w.pos.y}`));
+    expect(slots.size).toBe(ws.length);
+    // All on land
+    for (const w of ws) expect(w.pos.x).toBeLessThan(24);
+  });
+
+  it('wind turbine produces power once active', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    // Replace tidal with a wind turbine only — isolate output to wind.
+    world.structures = world.structures.filter(s => s.kind !== 'tidal_generator');
+    world.inventory.salvage = WIND_TURBINE_COST;
+    buildWindTurbine(world);
+    run(world, config, rng, 2000);
+    expect(world.metrics.totalPowerGenerated).toBeGreaterThan(0);
+  });
+
+  it('wind turbine output is intermittent (varies tick to tick)', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.structures = world.structures.filter(s => s.kind !== 'tidal_generator');
+    world.inventory.salvage = WIND_TURBINE_COST;
+    buildWindTurbine(world);
+    // Cap fouling at 0 so we can isolate wind variance.
+    const samples: number[] = [];
+    let prev = world.metrics.totalPowerGenerated;
+    for (let i = 0; i < 800; i++) {
+      tick(world, config, rng);
+      const w = world.structures.find(s => s.kind === 'wind_turbine')!;
+      w.fouling = 0;
+      const dPower = world.metrics.totalPowerGenerated - prev;
+      prev = world.metrics.totalPowerGenerated;
+      samples.push(dPower);
+    }
+    const max = Math.max(...samples);
+    const min = Math.min(...samples);
+    expect(max - min).toBeGreaterThan(5); // meaningfully variable output
+  });
+
+  it('brott repairs broken wind turbine in recovery-style scenario', () => {
+    const { world, rng, config } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.inventory.salvage = WIND_TURBINE_COST;
+    const id = buildWindTurbine(world)!;
+    const w = world.structures.find(s => s.id === id)!;
+    w.health = 0.3;
+    world.brotts[0].energy = 1;
+    world.brotts[0].task = { kind: 'idle', progress: 0 };
+    // Brott should walk to and repair the wind turbine. Give it time.
+    for (let i = 0; i < 1500; i++) tick(world, config, rng);
+    expect(w.health).toBeGreaterThan(0.95);
+  });
+
+  it('brott cleans wind turbine when fouling above threshold', () => {
+    const { world, rng, config } = createWorld({ seed: 9 });
+    skipRecovery(world);
+    // Remove tidal so wind is the only candidate, and remove the intake so debris won't compete.
+    world.structures = world.structures.filter(s => s.kind === 'charger');
+    world.inventory.salvage = WIND_TURBINE_COST;
+    const id = buildWindTurbine(world)!;
+    const w = world.structures.find(s => s.id === id)!;
+    w.fouling = 0.9;
+    world.brotts[0].energy = 1;
+    world.brotts[0].task = { kind: 'idle', progress: 0 };
+    // Pick a task this tick.
+    tick(world, config, rng);
+    expect(world.brotts[0].task.targetId).toBe(id);
+  });
+
+  it('buildAnyGenerator follows windRatio policy', () => {
+    const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    world.inventory.salvage = 10_000;
+    // windRatio=1 — always wind
+    for (let i = 0; i < 5; i++) buildAnyGenerator(world, { windRatio: 1 });
+    expect(world.structures.filter(s => s.kind === 'wind_turbine').length).toBe(5);
+  });
+
+  it('buildAnyGenerator with windRatio=0.5 produces balanced mix', () => {
+    const { world } = createWorld({ seed: 5 });
+    skipRecovery(world);
+    // Already has 1 tidal from createWorld
+    world.inventory.salvage = 10_000;
+    for (let i = 0; i < 9; i++) buildAnyGenerator(world, { windRatio: 0.5 });
+    const winds = world.structures.filter(s => s.kind === 'wind_turbine').length;
+    const tidals = world.structures.filter(s => s.kind === 'tidal_generator').length;
+    expect(winds).toBeGreaterThan(0);
+    expect(tidals).toBeGreaterThan(0);
+    // Within +/-2 of half
+    expect(Math.abs(winds - tidals)).toBeLessThanOrEqual(2);
   });
 });

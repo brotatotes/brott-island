@@ -14,6 +14,9 @@ const COLORS = {
   charger: '#5aa37a',
   generator: '#7aa3c8',
   generatorDirty: '#a36e5a',
+  windTurbine: '#cfd8d3',
+  windTurbineBlade: '#e8d97a',
+  windTurbineDirty: '#a36e5a',
   intake: '#5a7a8a',
   debris: '#8a7a5a',
 };
@@ -33,7 +36,7 @@ export function hitTest(world: World, px: number, py: number): HoverTarget | nul
     if (within(b.pos, px, py, 7)) return { kind: 'brott', ref: b };
   }
   for (const s of world.structures) {
-    const r = s.kind === 'intake' ? 8 : s.kind === 'charger' ? 10 : 12;
+    const r = s.kind === 'intake' ? 8 : s.kind === 'charger' ? 10 : s.kind === 'wind_turbine' ? 10 : 12;
     if (within(s.pos, px, py, r)) return { kind: 'structure', ref: s };
   }
   for (const d of world.debris) {
@@ -66,6 +69,23 @@ export function tooltipFor(target: HoverTarget, world: World): string[] {
         return [
           `Tidal Generator (${s.id})`,
           `output   ${out.toFixed(0)} / ${s.outputBase} kW`,
+          `fouling  ${(s.fouling * 100).toFixed(0)}%`,
+          `health   ${(s.health * 100).toFixed(0)}%`,
+          `tier     ${s.tier}`,
+        ];
+      }
+      if (s.kind === 'wind_turbine') {
+        // Read live wind from world.tick (purely cosmetic; sim is authoritative).
+        const TWO_PI = Math.PI * 2;
+        const slow = Math.sin((world.tick / 700) * TWO_PI);
+        const fast = Math.sin((world.tick / 137) * TWO_PI + 1.3);
+        let wind = 0.5 + 0.3 * slow + 0.2 * fast;
+        if (wind < 0.1) wind = 0.1; if (wind > 1) wind = 1;
+        const out = s.outputBase * (1 - s.fouling) * s.health * wind;
+        return [
+          `Wind Turbine (${s.id})`,
+          `output   ${out.toFixed(0)} / ${s.outputBase} kW`,
+          `wind     ${(wind * 100).toFixed(0)}%`,
           `fouling  ${(s.fouling * 100).toFixed(0)}%`,
           `health   ${(s.health * 100).toFixed(0)}%`,
           `tier     ${s.tier}`,
@@ -177,6 +197,39 @@ export function render(
       ctx.fillRect(px - 10, py + 12, 20, 3);
       ctx.fillStyle = COLORS.generator;
       ctx.fillRect(px - 10, py + 12, 20 * (1 - dirty), 3);
+    } else if (s.kind === 'wind_turbine') {
+      // Tower
+      ctx.fillStyle = '#3a4651';
+      ctx.fillRect(px - 2, py - 4, 4, 16);
+      // Hub
+      const dirty = s.fouling;
+      ctx.fillStyle = lerpColor(COLORS.windTurbine, COLORS.windTurbineDirty, dirty);
+      ctx.beginPath();
+      ctx.arc(px, py - 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      // Blades — spin speed driven by current wind factor
+      const TWO_PI = Math.PI * 2;
+      const slow = Math.sin((world.tick / 700) * TWO_PI);
+      const fast = Math.sin((world.tick / 137) * TWO_PI + 1.3);
+      let wind = 0.5 + 0.3 * slow + 0.2 * fast;
+      if (wind < 0.1) wind = 0.1; if (wind > 1) wind = 1;
+      const ang = world.tick * 0.25 * wind;
+      ctx.strokeStyle = lerpColor(COLORS.windTurbineBlade, COLORS.windTurbineDirty, dirty);
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const a = ang + (i * TWO_PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 4);
+        ctx.lineTo(px + Math.cos(a) * 9, py - 4 + Math.sin(a) * 9);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 1;
+      // Output bar at base
+      const eff = (1 - dirty) * s.health * wind;
+      ctx.fillStyle = '#0d1418';
+      ctx.fillRect(px - 10, py + 12, 20, 3);
+      ctx.fillStyle = COLORS.windTurbineBlade;
+      ctx.fillRect(px - 10, py + 12, 20 * eff, 3);
     } else if (s.kind === 'intake') {
       ctx.fillStyle = COLORS.intake;
       ctx.beginPath();

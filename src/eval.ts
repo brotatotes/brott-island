@@ -90,7 +90,7 @@ function runVariant(variant: Variant, seeds: number[], ticks: number): VariantRe
     };
     const { world, rng, config } = createWorld({ seed, config: configOverride });
     run(world, config, rng, ticks);
-    const gens = world.structures.filter(s => s.kind === 'tidal_generator').length;
+    const gens = world.structures.filter(s => s.kind === 'tidal_generator' || s.kind === 'wind_turbine').length;
     perSeed.push({
       seed,
       delivered: world.metrics.totalPowerDelivered,

@@ -42,5 +42,21 @@
     "name": "econ-dirtier-gens",
     "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
     "config": { "foulingRatePerTick": 0.0016 }
+  },
+  {
+    "name": "wind-heavy",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.8 }
+  },
+  {
+    "name": "wind-only",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 }
+  },
+  {
+    "name": "tidal-heavy",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.2 }
+  },
+  {
+    "name": "balanced-mix",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5 }
   }
 ]

@@ -1,8 +1,25 @@
 // World tick. Deterministic given (world, config, rng).
 
 import { makeRng, Rng } from './rng';
-import { Brott, SimConfig, Structure, World, DEFAULT_CONFIG } from './types';
+import { Brott, SimConfig, Structure, World, DEFAULT_CONFIG, isGenerator } from './types';
 import { decideTask } from './brott';
+
+/**
+ * Deterministic wind multiplier for the given tick.
+ * Returns a value in [0.1, 1.0]. Mean is roughly 0.5 over long horizons —
+ * wind turbines produce ~half the throughput of an equally-rated tidal
+ * generator on average, but with high variance (intermittency is the point).
+ */
+export function windFactor(tick: number): number {
+  const TWO_PI = Math.PI * 2;
+  // Two sine components: a slow ~700-tick weather cycle plus a faster ~137-tick gust pattern.
+  const slow = Math.sin((tick / 700) * TWO_PI);
+  const fast = Math.sin((tick / 137) * TWO_PI + 1.3);
+  const raw = 0.5 + 0.3 * slow + 0.2 * fast;
+  if (raw < 0.1) return 0.1;
+  if (raw > 1.0) return 1.0;
+  return raw;
+}
 
 export interface SimOptions {
   seed?: number;
@@ -87,7 +104,7 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
         // Arrived: convert to action based on target kind
         const struct = world.structures.find(s => s.id === brott.task.targetId);
         const debris = world.debris.find(de => de.id === brott.task.targetId);
-        if (struct?.kind === 'tidal_generator') {
+        if (struct?.kind === 'tidal_generator' || struct?.kind === 'wind_turbine') {
           if (struct.health < 0.8) {
             brott.task = { kind: 'repair', targetId: struct.id, progress: 0 };
           } else {
@@ -160,12 +177,13 @@ function stepBrott(world: World, brott: Brott, config: SimConfig): void {
 function stepGenerators(world: World, _config: SimConfig): void {
   const cap = _config.batteryCapacity;
   for (const s of world.structures) {
-    if (s.kind !== 'tidal_generator') continue;
+    if (!isGenerator(s)) continue;
     // Dormant generators (health < 0.8) don't accrue fouling and produce no output.
     if (s.health < 0.8) continue;
     s.fouling = Math.min(1, s.fouling + _config.foulingRatePerTick);
-    // Output scales with (1 - fouling) * health
-    const out = s.outputBase * (1 - s.fouling) * s.health;
+    // Output scales with (1 - fouling) * health, and — for wind turbines — wind factor.
+    const envFactor = s.kind === 'wind_turbine' ? windFactor(world.tick) : 1;
+    const out = s.outputBase * (1 - s.fouling) * s.health * envFactor;
     world.metrics.totalPowerGenerated += out;
     const before = world.inventory.power ?? 0;
     const after = before + out;
@@ -224,16 +242,16 @@ export function runAutoBuildPolicy(world: World, config: SimConfig): void {
   }
 
   const brottCount = world.brotts.length;
-  const genCount = world.structures.filter(s => s.kind === 'tidal_generator').length;
+  const genCount = world.structures.filter(isGenerator).length;
   const ratio = brottCount / Math.max(1, genCount);
   const preferBrott = ratio < p.brottPerGenTarget;
 
   let id: string | null;
   if (preferBrott) {
     id = buildBrott(world);
-    if (id === null) id = buildTidalGenerator(world);
+    if (id === null) id = buildAnyGenerator(world, p);
   } else {
-    id = buildTidalGenerator(world);
+    id = buildAnyGenerator(world, p);
     if (id === null) id = buildBrott(world);
   }
   if (id !== null) {
@@ -356,4 +374,106 @@ export function buildBrott(world: World): string | null {
     job: 'auto',
   });
   return id;
+}
+
+// --- Wind turbine building ---
+//
+// Design notes (Phase A second-generator type):
+//
+//   Tidal generator (existing): 100 kW nominal, steady. Output = 100*(1-fouling)*health.
+//     Cost 50 salvage. Placed offshore (water columns east of the shore at x=24).
+//
+//   Wind turbine (new):
+//     - Higher nominal rating (120 kW) but weather-modulated.
+//     - Wind multiplier ranges [0.1 .. 1.0] with mean ~0.5 (see windFactor()) \u2192
+//       average effective throughput ~60 kW vs tidal's steady ~100 kW.
+//       Wind is *cheaper per turbine* but *less reliable per turbine*.
+//     - Cost 35 salvage (cheaper than tidal). Placed ON LAND \u2014 x < shore (24).
+//     - Brotts maintain wind turbines the same way as tidal generators
+//       (fouling accrues, cleaning resets it, repair restores health).
+//       Justification: the framework already treats both as `isGenerator`,
+//       so brott logic + UI build buttons stack cleanly. No new verb required.
+//
+//   Mix implications (verified by eval):
+//     - All-tidal: predictable, high steady delivered.
+//     - All-wind: cheaper to scale + more units, but intermittency drags mean.
+//     - Mixed: best of both \u2014 wind fills cheap capacity while tidal anchors baseline.
+
+export const WIND_TURBINE_COST = 35;
+export const WIND_TURBINE_BASE_OUTPUT = 120;
+
+// Wind turbines live on land (x < SHORE_TILE_X=24). 14 slots scattered across the\n// island so they don't collide with the charger (x=8, y=10) or each other.
+const WIND_TURBINE_SLOTS: { x: number; y: number }[] = [
+  { x: 4, y: 4 },
+  { x: 14, y: 4 },
+  { x: 20, y: 4 },
+  { x: 4, y: 16 },
+  { x: 4, y: 22 },
+  { x: 14, y: 22 },
+  { x: 20, y: 22 },
+  { x: 20, y: 10 },
+  { x: 14, y: 16 },
+  { x: 14, y: 10 },
+  { x: 20, y: 16 },
+  { x: 2, y: 10 },
+  { x: 11, y: 7 },
+  { x: 17, y: 7 },
+];
+
+export const MAX_WIND_TURBINES = WIND_TURBINE_SLOTS.length;
+
+/**
+ * Attempt to build a new wind turbine. Returns id on success, null on failure.
+ * Spends `WIND_TURBINE_COST` salvage. Places at next unoccupied land slot.
+ */
+export function buildWindTurbine(world: World): string | null {
+  if ((world.inventory.salvage ?? 0) < WIND_TURBINE_COST) return null;
+
+  const occupied = new Set(
+    world.structures
+      .filter(s => s.kind === 'wind_turbine')
+      .map(s => `${s.pos.x},${s.pos.y}`),
+  );
+  const slot = WIND_TURBINE_SLOTS.find(s => !occupied.has(`${s.x},${s.y}`));
+  if (!slot) return null;
+
+  world.inventory.salvage = (world.inventory.salvage ?? 0) - WIND_TURBINE_COST;
+
+  const n = world.structures.filter(s => s.kind === 'wind_turbine').length + 1;
+  const id = `wind-${n}`;
+  world.structures.push({
+    id,
+    kind: 'wind_turbine',
+    pos: { x: slot.x, y: slot.y },
+    tier: 1,
+    health: 1,
+    fouling: 0,
+    outputBase: WIND_TURBINE_BASE_OUTPUT,
+  });
+  return id;
+}
+
+/**
+ * Auto-build helper: picks tidal or wind based on policy.windRatio.
+ * windRatio is the desired fraction of generators that should be wind turbines.
+ * windRatio=0 \u2192 always tidal; windRatio=1 \u2192 always wind; 0.5 \u2192 balanced.
+ * Falls back to the other type if the preferred type can't build (slots full or unaffordable).
+ */
+export function buildAnyGenerator(world: World, policy: { windRatio?: number }): string | null {
+  const windRatio = policy.windRatio ?? 0;
+  const winds = world.structures.filter(s => s.kind === 'wind_turbine').length;
+  const tidals = world.structures.filter(s => s.kind === 'tidal_generator').length;
+  const total = winds + tidals;
+  const currentWindFrac = total === 0 ? 0 : winds / total;
+  const preferWind = currentWindFrac < windRatio;
+
+  if (preferWind) {
+    const windSlotsFull = winds >= MAX_WIND_TURBINES;
+    if (!windSlotsFull) return buildWindTurbine(world);
+    return buildTidalGenerator(world);
+  } else {
+    const tidalSlotsFull = tidals >= MAX_TIDAL_GENERATORS;
+    if (!tidalSlotsFull) return buildTidalGenerator(world);
+    return buildWindTurbine(world);
+  }
 }

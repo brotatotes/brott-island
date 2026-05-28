@@ -90,7 +90,7 @@
       }
 
       .build-row { display: flex; flex-direction: column; gap: 4px; }
-      #build-gen, #build-brott {
+      #build-gen, #build-brott, #build-wind {
         background: #2a4a3a;
         color: #cfd8d3;
         border: 1px solid #5a7d4a;
@@ -99,14 +99,14 @@
         padding: 6px 8px;
         cursor: pointer;
       }
-      #build-gen:hover:not(:disabled), #build-brott:hover:not(:disabled) { background: #355d48; }
-      #build-gen:disabled, #build-brott:disabled {
+      #build-gen:hover:not(:disabled), #build-brott:hover:not(:disabled), #build-wind:hover:not(:disabled) { background: #355d48; }
+      #build-gen:disabled, #build-brott:disabled, #build-wind:disabled {
         background: #1a2228;
         color: #5a6a6e;
         border-color: #2a363d;
         cursor: not-allowed;
       }
-      #build-hint, #build-brott-hint { font-size: 10px; color: #8aa39b; }
+      #build-hint, #build-brott-hint, #build-wind-hint { font-size: 10px; color: #8aa39b; }
 
       .jobs-placeholder { color: #5a6a6e; font-style: italic; font-size: 11px; }
 
@@ -157,6 +157,8 @@
             <div class="build-row">
               <button id="build-gen" type="button" disabled>Build Tidal Generator (cost: 50 salvage)</button>
               <span id="build-hint">Need 50 more salvage</span>
+              <button id="build-wind" type="button" disabled>Build Wind Turbine (cost: 35 salvage)</button>
+              <span id="build-wind-hint">Need 35 more salvage</span>
               <button id="build-brott" type="button" disabled>Build Brott (cost: 100 salvage)</button>
               <span id="build-brott-hint">Need 100 more salvage</span>
             </div>

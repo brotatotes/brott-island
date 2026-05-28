@@ -2,12 +2,13 @@
 // (via callbacks) world entity names. Keeps the sim DOM-free.
 
 import { World, Brott, Structure, Job } from '../sim/types';
-import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS, buildBrott, BROTT_COST, MAX_BROTTS } from '../sim/world';
+import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS, buildBrott, BROTT_COST, MAX_BROTTS, buildWindTurbine, WIND_TURBINE_COST, MAX_WIND_TURBINES } from '../sim/world';
 import { DEFAULT_CONFIG } from '../sim/types';
 
 export interface DashboardCallbacks {
   onBuildGenerator?: (newId: string) => void;
   onBuildBrott?: (newId: string) => void;
+  onBuildWindTurbine?: (newId: string) => void;
 }
 
 type RowCache = {
@@ -46,6 +47,8 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   const buildHint = document.getElementById('build-hint')!;
   const buildBrottBtn = document.getElementById('build-brott') as HTMLButtonElement;
   const buildBrottHint = document.getElementById('build-brott-hint')!;
+  const buildWindBtn = document.getElementById('build-wind') as HTMLButtonElement;
+  const buildWindHint = document.getElementById('build-wind-hint')!;
   const log = document.getElementById('event-log') as HTMLDivElement;
 
   let buildCount = 0;
@@ -64,6 +67,14 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
       const b = world.brotts.find(x => x.id === newId);
       pushLog(log, `Built ${b?.name ?? newId}`);
       callbacks.onBuildBrott?.(newId);
+    }
+  });
+  buildWindBtn.addEventListener('click', () => {
+    const newId = buildWindTurbine(world);
+    if (newId) {
+      const n = world.structures.filter(s => s.kind === 'wind_turbine').length;
+      pushLog(log, `Built wind turbine #${n}`);
+      callbacks.onBuildWindTurbine?.(newId);
     }
   });
 
@@ -127,6 +138,22 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
     } else {
       const needB = BROTT_COST - (world.inventory.salvage ?? 0);
       buildBrottHint.textContent = `Need ${needB} more salvage`;
+    }
+
+    // Build Wind Turbine button
+    const windCount = world.structures.filter(s => s.kind === 'wind_turbine').length;
+    const windFull = windCount >= MAX_WIND_TURBINES;
+    const canAffordWind = (world.inventory.salvage ?? 0) >= WIND_TURBINE_COST;
+    buildWindBtn.disabled = recovery || !canAffordWind || windFull;
+    if (recovery) {
+      buildWindHint.textContent = `Phase 1: complete recovery first.`;
+    } else if (windFull) {
+      buildWindHint.textContent = `All wind turbine sites full (${MAX_WIND_TURBINES})`;
+    } else if (canAffordWind) {
+      buildWindHint.textContent = `Ready to build (cost ${WIND_TURBINE_COST} salvage). On-land, variable output.`;
+    } else {
+      const needW = WIND_TURBINE_COST - (world.inventory.salvage ?? 0);
+      buildWindHint.textContent = `Need ${needW} more salvage`;
     }
   }
 
@@ -296,6 +323,7 @@ function createStructRow(s: Structure): StructRowCache {
 function labelFor(s: Structure): string {
   switch (s.kind) {
     case 'tidal_generator': return `Tidal Generator (${s.id})`;
+    case 'wind_turbine': return `Wind Turbine (${s.id})`;
     case 'charger': return `Charger (${s.id})`;
     case 'intake': return `Water Intake (${s.id})`;
   }
@@ -303,7 +331,7 @@ function labelFor(s: Structure): string {
 
 function statusFor(s: Structure): string {
   if (s.health < 0.8) return 'Broken';
-  if (s.kind === 'tidal_generator') {
+  if (s.kind === 'tidal_generator' || s.kind === 'wind_turbine') {
     if (s.fouling >= 0.5) return 'Fouled';
     return 'Active';
   }

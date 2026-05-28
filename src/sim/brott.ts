@@ -2,6 +2,7 @@
 // Day 1 policy: priority-based. Low energy -> recharge. High fouling -> clean. Else collect debris if any. Else idle.
 
 import { Brott, Structure, World, SimConfig, BrottTask, Vec2 } from './types';
+import { isGenerator } from './types';
 
 function dist(a: Vec2, b: Vec2): number {
   const dx = a.x - b.x;
@@ -23,7 +24,7 @@ function pickBrokenForRepair(world: World): Structure | undefined {
   // Priority: charger > generator > intake.
   const charger = world.structures.find(s => s.kind === 'charger' && s.health < 0.8);
   if (charger) return charger;
-  const gens = world.structures.filter(s => s.kind === 'tidal_generator' && s.health < 0.8);
+  const gens = world.structures.filter(s => s.kind === 'tidal_generator' || s.kind === 'wind_turbine' ? s.health < 0.8 : false);
   if (gens.length > 0) {
     // Lowest-health generator first.
     let best = gens[0];
@@ -75,7 +76,7 @@ export function decideTask(world: World, brott: Brott, config: SimConfig): Brott
     if (job === 'clean' && (brott.task.kind === 'clean' || brott.task.kind === 'walk')) {
       // walk could be toward a debris from before — re-validate the target kind.
       const tid = brott.task.targetId;
-      const isCleanTarget = !!tid && world.structures.some(s => s.id === tid && s.kind === 'tidal_generator');
+      const isCleanTarget = !!tid && world.structures.some(s => s.id === tid && isGenerator(s));
       const isChargerWalk = !!tid && world.structures.some(s => s.id === tid && s.kind === 'charger');
       if (brott.task.kind === 'clean' || isCleanTarget || isChargerWalk) return brott.task;
     }
@@ -88,7 +89,7 @@ export function decideTask(world: World, brott: Brott, config: SimConfig): Brott
   }
 
   // Idle: pick a priority based on job.
-  const gens = structuresOfKind(world, 'tidal_generator');
+  const gens = world.structures.filter(isGenerator);
   const considerClean = job === 'auto' || job === 'clean';
   const considerCollect = job === 'auto' || job === 'collect';
 

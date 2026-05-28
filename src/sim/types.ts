@@ -28,7 +28,14 @@ export interface Brott {
   job: Job;
 }
 
-export type StructureKind = 'tidal_generator' | 'charger' | 'intake';
+export type StructureKind = 'tidal_generator' | 'wind_turbine' | 'charger' | 'intake';
+
+// Generator-like structures: anything that produces power and is maintained by Brotts
+// (cleaned, repaired, counted toward auto-build ratios). Add new producers here.
+export const GENERATOR_KINDS: StructureKind[] = ['tidal_generator', 'wind_turbine'];
+export function isGenerator(s: { kind: StructureKind }): boolean {
+  return s.kind === 'tidal_generator' || s.kind === 'wind_turbine';
+}
 
 export interface Structure {
   id: string;
@@ -72,6 +79,7 @@ export interface AutoBuildPolicy {
   brottPerGenTarget: number;    // default 1.0
   maxIdleRatio: number;         // default 0.5
   buildCooldownTicks: number;   // default 200
+  windRatio?: number;           // default 0 → all-tidal. fraction of generators that should be wind.
 }
 
 export interface SimConfig {
@@ -107,5 +115,6 @@ export const DEFAULT_CONFIG: SimConfig = {
     brottPerGenTarget: 1.0,
     maxIdleRatio: 0.5,
     buildCooldownTicks: 200,
+    windRatio: 0,
   },
 };
