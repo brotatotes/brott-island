@@ -91,6 +91,25 @@ Knobs (see `src/sim/types.ts → AutoBuildPolicy`):
 - `brottPerGenTarget` — desired brott/gen ratio; builds a brott when current ratio drops below this, else builds a generator.
 - `maxIdleRatio` — skip building if recent brott-idle ratio exceeds this (don't overcrowd).
 - `buildCooldownTicks` — minimum ticks between builds.
+- `windRatio` (0..1) — when building a generator, probability of building a wind turbine vs tidal. `0` = all-tidal (baseline), `0.5` = balanced mix, `1.0` = all-wind. Nightly eval sweeps this across 7 values.
+
+### Wind vs tidal
+
+Two generator types with different risk profiles:
+
+- **Tidal generators** are offshore + submerged. Steady output, accumulate fouling over time (cleaned by the brott `clean` verb), immune to storms.
+- **Wind turbines** are on-land. Higher peak output (320 base) but intermittent (driven by a wind cycle, mean ~0.7), and **vulnerable to storms** — every ~1250 ticks a storm event damages each live turbine independently (95% hit chance, 5–18% health loss). Brotts auto-repair via the existing `repair` verb. Larger wind fleets get hit harder per storm, so all-wind builds are higher mean but higher variance.
+
+Current tuning (50k ticks, 8 seeds):
+
+| variant | mean delivered | vs baseline | CV |
+| --- | ---: | ---: | ---: |
+| baseline (all tidal) | 16,154,551 | +0.0% | 2.5% |
+| balanced (windRatio=0.5) | 17,174,156 | +6.3% | 3.4% |
+| wind-only (windRatio=1.0) | 21,184,359 | +31.1% | 4.8% |
+
+Balanced beats baseline cleanly; wind-only is the high-mean/high-variance gamble.
+
 
 ### Eval harness
 
