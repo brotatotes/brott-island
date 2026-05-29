@@ -3,11 +3,11 @@
 
 export type Vec2 = { x: number; y: number };
 
-export type Capability = 'clean' | 'recharge' | 'collect' | 'repair';
+export type Capability = 'clean' | 'recharge' | 'collect' | 'repair' | 'restart';
 
 export type Job = 'auto' | 'clean' | 'collect' | 'recharge_only';
 
-export type BrottTaskKind = 'idle' | 'walk' | 'clean' | 'recharge' | 'collect' | 'repair';
+export type BrottTaskKind = 'idle' | 'walk' | 'clean' | 'recharge' | 'collect' | 'repair' | 'restart';
 
 export type Phase = 'recovery' | 'operations';
 
@@ -26,15 +26,38 @@ export interface Brott {
   capabilities: Capability[];
   task: BrottTask;
   job: Job;
+  stationId?: string;    // recharge station that owns this Brott's slot
 }
 
-export type StructureKind = 'tidal_generator' | 'wind_turbine' | 'charger' | 'intake';
+// Phase C: 'charger' renamed to 'recharge_station'. First one carries solar=true.
+export type StructureKind = 'tidal_generator' | 'wind_turbine' | 'recharge_station' | 'intake';
 
 // Generator-like structures: anything that produces power and is maintained by Brotts
 // (cleaned, repaired, counted toward auto-build ratios). Add new producers here.
 export const GENERATOR_KINDS: StructureKind[] = ['tidal_generator', 'wind_turbine'];
 export function isGenerator(s: { kind: StructureKind }): boolean {
   return s.kind === 'tidal_generator' || s.kind === 'wind_turbine';
+}
+
+/**
+ * "Basic" producer = produces power with zero parasitic draw and never auto-powers-off
+ * in a blackout. Wind turbines + solar recharge stations. Used for game-over check.
+ */
+export function isBasicProducer(s: { kind: StructureKind; solar?: boolean; health: number }): boolean {
+  if (s.health < 0.8) return false;
+  if (s.kind === 'wind_turbine') return true;
+  if (s.kind === 'recharge_station' && s.solar) return true;
+  return false;
+}
+
+/**
+ * Parasitic = consumes battery while online. Auto-powers-off when battery hits zero.
+ * Tidal generators + plain (non-solar) recharge stations.
+ */
+export function isParasitic(s: { kind: StructureKind; solar?: boolean }): boolean {
+  if (s.kind === 'tidal_generator') return true;
+  if (s.kind === 'recharge_station' && !s.solar) return true;
+  return false;
 }
 
 export interface Structure {
@@ -45,19 +68,22 @@ export interface Structure {
   health: number;        // 0..1
   fouling: number;       // 0..1, generator only
   outputBase: number;    // kW nominal output, generator only
+  online: boolean;       // false when blackout-disabled; must be restarted by a Brott
+  solar?: boolean;       // recharge stations only: true = solar panel, never offline
 }
 
 export interface Debris {
   id: string;
   pos: Vec2;
-  // future: kind/mass for variety; salvage yield is currently fixed
 }
 
 export type Inventory = Record<string, number>;
 
+export type SimEventKind = 'storm' | 'blackout' | 'restart' | 'low_battery_first' | 'game_over' | 'brott_died';
+
 export interface SimEvent {
   tick: number;
-  kind: 'storm';
+  kind: SimEventKind;
   targetId: string;
   magnitude: number;
 }
@@ -65,55 +91,73 @@ export interface SimEvent {
 export interface World {
   tick: number;
   phase: Phase;                // 'recovery' until starter structures repaired, then 'operations'
-  rngState: number;            // for reproducibility/save (not yet used)
+  rngState: number;
   brotts: Brott[];
   structures: Structure[];
   debris: Debris[];
   inventory: Inventory;        // global stockpile: power, salvage, ...
   metrics: {
     totalPowerGenerated: number;
-    totalPowerDelivered: number;
+    totalPowerDelivered: number;   // legacy/visibility — wasted overflow
+    totalPowerConsumed: number;
+    totalPowerWasted: number;
     debrisCollected: number;
     ticksAtFullOutput: number;
+    ticksSurvived: number;         // primary score
+    blackouts: number;
+    restarts: number;
+    brottTickAliveSum: number;     // secondary: aggregate Brott-tick count
+    deaths: number;
   };
-  // Auto-build bookkeeping (deterministic; populated even when policy disabled)
+  // Auto-build bookkeeping
   lastBuildTick: number;
-  brottIdleHistory: number[];  // ring buffer, 0/1 per tick — "was any brott idle this tick"
-  events: SimEvent[];          // recent sim events (storms, etc.); capped ring buffer
+  brottIdleHistory: number[];
+  events: SimEvent[];
+  // Game state
+  gameOver: boolean;
+  lowBatteryAlarmFired: boolean;   // first-time low-battery cue tracking
 }
 
 export interface AutoBuildPolicy {
-  enabled: boolean;             // default false
-  brottPerGenTarget: number;    // default 1.0
-  maxIdleRatio: number;         // default 0.5
-  buildCooldownTicks: number;   // default 200
-  windRatio?: number;           // default 0 → all-tidal. fraction of generators that should be wind.
+  enabled: boolean;
+  brottPerGenTarget: number;
+  maxIdleRatio: number;
+  buildCooldownTicks: number;
+  windRatio?: number;               // fraction of new generators that should be wind
+  rechargeStationRatio?: number;    // fraction of total builds devoted to recharge stations
+                                    // (so the Brott cap grows alongside the fleet)
 }
 
 export interface SimConfig {
-  // tuning knobs the agent can sweep over
-  brottSpeed: number;             // tiles/tick
+  brottSpeed: number;
   brottEnergyDrainPerTick: number;
-  brottRechargeRate: number;      // energy/tick when on charger
-  cleanRate: number;              // fouling reduced per tick when cleaning
-  repairRate: number;             // health restored per tick when repairing
-  collectDuration: number;        // ticks to collect one debris
-  foulingRatePerTick: number;     // fouling added per tick
-  debrisSpawnChance: number;      // per tick, 0..1
-  lowEnergyThreshold: number;     // brott returns to charge below this
-  highFoulingThreshold: number;   // brott prioritizes cleaning above this
-  batteryCapacity: number;        // max kWh stored locally; overflow goes to delivered
-  // Wind tunables (Phase B). Defaults give wind a meaningful niche
-  // (cheap-to-scale + storm-vulnerable) without strictly dominating tidal.
-  windBaseOutput: number;         // wind turbine nominal kW (was hard-coded 120)
-  windCost: number;               // salvage cost per wind turbine
-  windMeanFactor: number;         // mean of windFactor() over long horizons (~0.5)
-  // Storm damage (Phase B). Wind turbines occasionally take direct health hits.
-  stormChancePerTick: number;     // probability of a storm event per tick (0..1)
-  stormDamageMin: number;         // min health damage per affected turbine
-  stormDamageMax: number;         // max health damage per affected turbine
-  stormTurbineHitChance: number;  // per-turbine probability of being hit during a storm
-  autoBuild?: AutoBuildPolicy;    // optional automatic salvage spend (off by default)
+  brottRechargeRate: number;        // energy/tick when on a recharge station
+  cleanRate: number;
+  repairRate: number;
+  restartRate: number;              // progress/tick on restart verb
+  collectDuration: number;
+  foulingRatePerTick: number;
+  debrisSpawnChance: number;
+  lowEnergyThreshold: number;
+  highFoulingThreshold: number;
+  batteryCapacity: number;          // max kWh stored on the island
+  batteryRestartThreshold: number;  // 0..1 fraction of battery cap required before Brotts will restart offline buildings
+  lowBatteryAlarmThreshold: number; // 0..1 fraction; below this triggers the first-time alarm
+  // Power flows
+  tidalParasiticDraw: number;       // kW consumed by each tidal generator each tick while online
+  rechargeStationIdleDraw: number;  // kW consumed by a plain recharge station each tick (lights, sensors)
+  rechargeStationActiveDraw: number;// kW additional draw when a Brott is recharging at a plain station
+  solarTrickleOutput: number;       // kW produced each tick by a solar recharge station (its own panel)
+  // Wind
+  windBaseOutput: number;
+  windCost: number;
+  windMeanFactor: number;
+  // Storm
+  stormChancePerTick: number;
+  stormDamageMin: number;
+  stormDamageMax: number;
+  stormTurbineHitChance: number;
+  autoBuild?: AutoBuildPolicy;
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -122,19 +166,23 @@ export const DEFAULT_CONFIG: SimConfig = {
   brottRechargeRate: 0.01,
   cleanRate: 0.015,
   repairRate: 0.005,
+  restartRate: 0.02,                // ~50 ticks per restart
   collectDuration: 40,
   foulingRatePerTick: 0.0008,
-  batteryCapacity: 500,
+  batteryCapacity: 800,             // medium capacity, sized so a balanced fleet has ~30s of buffer at peak draw
+  batteryRestartThreshold: 0.2,
+  lowBatteryAlarmThreshold: 0.3,
+  // Tidal: parasitic ~8% of base output. Net ~92 kW per healthy generator.
+  tidalParasiticDraw: 8,
+  rechargeStationIdleDraw: 0.5,
+  rechargeStationActiveDraw: 1.5,   // recharging a Brott costs 1.5 kWh/tick on top of idle draw
+  solarTrickleOutput: 2.0,          // enough to cover one Brott's recharge indefinitely (~2 vs 2)
   debrisSpawnChance: 0.012,
   lowEnergyThreshold: 0.25,
   highFoulingThreshold: 0.5,
   windBaseOutput: 320,
   windCost: 30,
   windMeanFactor: 0.7,
-  // Storm: ~1 event per ~1250 ticks (~40 per 50k-tick run). Each storm checks every wind
-  // turbine independently at 95% hit chance, damaging in [0.05, 0.18]. Brott repair verb
-  // restores health. Balance: balanced-mix (windRatio=0.5) beats baseline by ~7% with
-  // higher variance; wind-only is high-output but risky (large fleets get hammered per storm).
   stormChancePerTick: 0.0008,
   stormDamageMin: 0.05,
   stormDamageMax: 0.18,
@@ -145,5 +193,6 @@ export const DEFAULT_CONFIG: SimConfig = {
     maxIdleRatio: 0.5,
     buildCooldownTicks: 200,
     windRatio: 0,
+    rechargeStationRatio: 0.15,
   },
 };

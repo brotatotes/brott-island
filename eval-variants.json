@@ -1,84 +1,60 @@
 [
   {
     "name": "baseline",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 }
+  },
+  {
+    "name": "wind-heavy",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.8, "rechargeStationRatio": 0.15 }
+  },
+  {
+    "name": "tidal-heavy",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.2, "rechargeStationRatio": 0.15 }
+  },
+  {
+    "name": "all-wind",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0, "rechargeStationRatio": 0.15 }
+  },
+  {
+    "name": "all-tidal-RISKY",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.0, "rechargeStationRatio": 0.15 },
+    "config": {}
+  },
+  {
+    "name": "more-stations",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.3 }
+  },
+  {
+    "name": "no-stations",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.0 }
   },
   {
     "name": "more-brotts",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.5, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+    "policy": { "enabled": true, "brottPerGenTarget": 2.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.2 }
   },
   {
-    "name": "fewer-brotts",
-    "policy": { "enabled": true, "brottPerGenTarget": 0.5, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 }
+    "name": "low-battery-cap",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 },
+    "config": { "batteryCapacity": 200 }
   },
   {
-    "name": "tight-utilization",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.3, "buildCooldownTicks": 200 }
+    "name": "high-battery-cap",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 },
+    "config": { "batteryCapacity": 2000 }
   },
   {
-    "name": "loose-utilization",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.7, "buildCooldownTicks": 200 }
-  },
-  {
-    "name": "fast-cooldown",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 50 }
-  },
-  {
-    "name": "econ-faster-debris",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
-    "config": { "debrisSpawnChance": 0.024 }
-  },
-  {
-    "name": "econ-slower-debris",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
-    "config": { "debrisSpawnChance": 0.006 }
-  },
-  {
-    "name": "econ-cleaner-gens",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
-    "config": { "foulingRatePerTick": 0.0004 }
-  },
-  {
-    "name": "econ-dirtier-gens",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200 },
-    "config": { "foulingRatePerTick": 0.0016 }
-  },
-  {
-    "name": "wind-r00-allTidal",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.0 }
-  },
-  {
-    "name": "wind-r02-tidalHeavy",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.2 }
-  },
-  {
-    "name": "wind-r03",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.3 }
-  },
-  {
-    "name": "wind-r05-balanced",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5 }
-  },
-  {
-    "name": "wind-r07",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.7 }
-  },
-  {
-    "name": "wind-r08-windHeavy",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.8 }
-  },
-  {
-    "name": "wind-r10-allWind",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 }
-  },
-  {
-    "name": "wind-r05-noStorms",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5 },
+    "name": "zero-wind-storms",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 },
     "config": { "stormChancePerTick": 0 }
   },
   {
-    "name": "wind-r10-noStorms",
-    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 1.0 },
-    "config": { "stormChancePerTick": 0 }
+    "name": "heavy-storms",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 },
+    "config": { "stormChancePerTick": 0.003 }
+  },
+  {
+    "name": "thirsty-tidal",
+    "policy": { "enabled": true, "brottPerGenTarget": 1.0, "maxIdleRatio": 0.5, "buildCooldownTicks": 200, "windRatio": 0.5, "rechargeStationRatio": 0.15 },
+    "config": { "tidalParasiticDraw": 25 }
   }
 ]

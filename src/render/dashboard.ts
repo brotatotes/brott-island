@@ -1,14 +1,19 @@
-// Dashboard DOM updater. Reads world state, mutates only the dashboard DOM and
-// (via callbacks) world entity names. Keeps the sim DOM-free.
+// Dashboard DOM updater. Reads world state, mutates only the dashboard DOM.
 
-import { World, Brott, Structure, Job } from '../sim/types';
-import { buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS, buildBrott, BROTT_COST, MAX_BROTTS, buildWindTurbine, WIND_TURBINE_COST, MAX_WIND_TURBINES } from '../sim/world';
-import { DEFAULT_CONFIG } from '../sim/types';
+import { World, Brott, Structure, Job, DEFAULT_CONFIG } from '../sim/types';
+import {
+  buildTidalGenerator, TIDAL_GENERATOR_COST, MAX_TIDAL_GENERATORS,
+  buildBrott, BROTT_COST, brottCap,
+  buildWindTurbine, WIND_TURBINE_COST, MAX_WIND_TURBINES,
+  buildRechargeStation, RECHARGE_STATION_COST, MAX_RECHARGE_STATIONS,
+} from '../sim/world';
 
 export interface DashboardCallbacks {
   onBuildGenerator?: (newId: string) => void;
   onBuildBrott?: (newId: string) => void;
   onBuildWindTurbine?: (newId: string) => void;
+  onBuildStation?: (newId: string) => void;
+  onAlarm?: () => void;
 }
 
 type RowCache = {
@@ -30,15 +35,17 @@ type StructRowCache = {
 export function initDashboard(world: World, callbacks: DashboardCallbacks = {}): {
   update: () => void;
 } {
-  // Metric fields
-  const elTick = document.getElementById('m-tick')!;
-  const elPhase = document.getElementById('m-phase')!;
-  const elPower = document.getElementById('m-power')!;
-  const elDelivered = document.getElementById('m-delivered')!;
-  const elSalvage = document.getElementById('m-salvage')!;
-  const elFouling = document.getElementById('m-fouling')!;
-  const elEnergy = document.getElementById('m-energy')!;
-  const elTask = document.getElementById('m-task')!;
+  // Brott portrait row
+  const portraitRow = document.getElementById('brott-portraits') as HTMLDivElement;
+  // Battery icon
+  const batteryFill = document.getElementById('battery-fill') as HTMLDivElement;
+  const batteryLabel = document.getElementById('battery-label') as HTMLDivElement;
+  const batteryRate = document.getElementById('battery-rate') as HTMLDivElement;
+  const batteryShell = document.getElementById('battery-shell') as HTMLDivElement;
+  // Survival
+  const survivalEl = document.getElementById('m-survived') as HTMLSpanElement;
+  const phaseEl = document.getElementById('m-phase') as HTMLSpanElement;
+  const salvageEl = document.getElementById('m-salvage') as HTMLSpanElement;
 
   const brottList = document.getElementById('brott-list') as HTMLUListElement;
   const structList = document.getElementById('struct-list') as HTMLUListElement;
@@ -49,18 +56,24 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   const buildBrottHint = document.getElementById('build-brott-hint')!;
   const buildWindBtn = document.getElementById('build-wind') as HTMLButtonElement;
   const buildWindHint = document.getElementById('build-wind-hint')!;
+  const buildStationBtn = document.getElementById('build-station') as HTMLButtonElement;
+  const buildStationHint = document.getElementById('build-station-hint')!;
   const log = document.getElementById('event-log') as HTMLDivElement;
-  let lastSeenStormTick = -1;
 
-  let buildCount = 0;
+  let lastSeenStormTick = -1;
+  let lastSeenBlackoutTick = -1;
+  let lastSeenRestartTick = -1;
+  let lastSeenDeathTick = -1;
+  let alarmFired = false;
+  // For inflow/outflow tracking — sample deltas over a short window.
+  let prevGenerated = 0;
+  let prevConsumed = 0;
+  let netRateSmoothed = 0;
+  const NET_RATE_ALPHA = 0.1;
+
   buildBtn.addEventListener('click', () => {
     const newId = buildTidalGenerator(world);
-    if (newId) {
-      buildCount += 1;
-      const n = world.structures.filter(s => s.kind === 'tidal_generator').length;
-      pushLog(log, `Built tidal generator #${n}`);
-      callbacks.onBuildGenerator?.(newId);
-    }
+    if (newId) { pushLog(log, `Built tidal generator`); callbacks.onBuildGenerator?.(newId); }
   });
   buildBrottBtn.addEventListener('click', () => {
     const newId = buildBrott(world);
@@ -72,10 +85,13 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   });
   buildWindBtn.addEventListener('click', () => {
     const newId = buildWindTurbine(world);
+    if (newId) { pushLog(log, `Built wind turbine`); callbacks.onBuildWindTurbine?.(newId); }
+  });
+  buildStationBtn.addEventListener('click', () => {
+    const newId = buildRechargeStation(world);
     if (newId) {
-      const n = world.structures.filter(s => s.kind === 'wind_turbine').length;
-      pushLog(log, `Built wind turbine #${n}`);
-      callbacks.onBuildWindTurbine?.(newId);
+      pushLog(log, `Built recharge station — Brott cap +1`);
+      callbacks.onBuildStation?.(newId);
     }
   });
 
@@ -83,97 +99,172 @@ export function initDashboard(world: World, callbacks: DashboardCallbacks = {}):
   const structRows = new Map<string, StructRowCache>();
 
   function update(): void {
-    // Metrics
-    elTick.textContent = String(world.tick);
-    elPhase.textContent = world.phase;
-    const cap = DEFAULT_CONFIG.batteryCapacity;
+    const cfg = DEFAULT_CONFIG;
+    const cap = cfg.batteryCapacity;
     const stored = world.inventory.power ?? 0;
-    elPower.textContent = `${stored.toFixed(0)} / ${cap} kWh`;
-    elDelivered.textContent = `${world.metrics.totalPowerDelivered.toFixed(0)} kWh`;
-    elSalvage.textContent = String(world.inventory.salvage ?? 0);
+    const batteryFrac = Math.max(0, Math.min(1, stored / cap));
 
-    const gens = world.structures.filter(s => s.kind === 'tidal_generator');
-    const avgFouling = gens.length > 0
-      ? gens.reduce((a, g) => a + g.fouling, 0) / gens.length
-      : 0;
-    elFouling.textContent = `${(avgFouling * 100).toFixed(0)}%`;
+    // --- Battery icon ---
+    batteryFill.style.height = `${(batteryFrac * 100).toFixed(1)}%`;
+    let zone: 'green' | 'yellow' | 'red';
+    if (batteryFrac > 0.5) zone = 'green';
+    else if (batteryFrac > 0.2) zone = 'yellow';
+    else zone = 'red';
+    batteryFill.dataset.zone = zone;
+    batteryShell.dataset.zone = zone;
+    batteryLabel.textContent = `${(batteryFrac * 100).toFixed(0)}%`;
 
-    const b0 = world.brotts[0];
-    elEnergy.textContent = b0 ? `${(b0.energy * 100).toFixed(0)}%` : '—';
-    elTask.textContent = b0 ? b0.task.kind : '—';
+    // Net rate
+    const genDelta = world.metrics.totalPowerGenerated - prevGenerated;
+    const consDelta = world.metrics.totalPowerConsumed - prevConsumed;
+    prevGenerated = world.metrics.totalPowerGenerated;
+    prevConsumed = world.metrics.totalPowerConsumed;
+    const instNet = genDelta - consDelta;
+    netRateSmoothed = netRateSmoothed * (1 - NET_RATE_ALPHA) + instNet * NET_RATE_ALPHA;
+    const arrow = netRateSmoothed >= 0 ? '▲' : '▼';
+    const color = netRateSmoothed >= 0 ? '#5aa37a' : '#c85a5a';
+    batteryRate.innerHTML = `<span style="color:${color}">${arrow} ${Math.abs(netRateSmoothed).toFixed(1)} kW</span>`;
 
-    // Brott rows
+    // First-time low-battery alarm
+    if (!alarmFired && batteryFrac < cfg.lowBatteryAlarmThreshold && world.phase === 'operations') {
+      alarmFired = true;
+      pushLog(log, `⚠️ BLEEP — battery low. Self-sustaining wind turbines will carry the load.`);
+      batteryShell.classList.add('shake');
+      setTimeout(() => batteryShell.classList.remove('shake'), 800);
+      callbacks.onAlarm?.();
+    }
+
+    // --- Status row ---
+    survivalEl.textContent = `${world.metrics.ticksSurvived}${world.gameOver ? ' — GAME OVER' : ''}`;
+    phaseEl.textContent = world.phase;
+    salvageEl.textContent = String(world.inventory.salvage ?? 0);
+
+    // --- Brott portrait row ---
+    syncPortraits(portraitRow, world);
+
+    // --- Brott rows ---
     syncBrottRows(brottList, world.brotts, brottRows);
 
-    // Structure rows
+    // --- Structure rows ---
     syncStructureRows(structList, world.structures, structRows);
 
-    // Build button
+    // --- Build buttons ---
     const recovery = world.phase === 'recovery';
+    const salvage = world.inventory.salvage ?? 0;
+
     const gensCount = world.structures.filter(s => s.kind === 'tidal_generator').length;
-    const slotsFull = gensCount >= MAX_TIDAL_GENERATORS;
-    const canAfford = (world.inventory.salvage ?? 0) >= TIDAL_GENERATOR_COST;
-    buildBtn.disabled = recovery || !canAfford || slotsFull;
-    if (recovery) {
-      buildHint.textContent = `Phase 1: complete recovery first.`;
-    } else if (slotsFull) {
-      buildHint.textContent = `All generator slots full (${MAX_TIDAL_GENERATORS})`;
-    } else if (canAfford) {
-      buildHint.textContent = `Ready to build (cost ${TIDAL_GENERATOR_COST} salvage)`;
-    } else {
-      const need = TIDAL_GENERATOR_COST - (world.inventory.salvage ?? 0);
-      buildHint.textContent = `Need ${need} more salvage`;
-    }
-
-    // Build Brott button
-    const brottsCount = world.brotts.length;
-    const brottsFull = brottsCount >= MAX_BROTTS;
-    const canAffordBrott = (world.inventory.salvage ?? 0) >= BROTT_COST;
-    buildBrottBtn.disabled = recovery || !canAffordBrott || brottsFull;
-    if (recovery) {
-      buildBrottHint.textContent = `Phase 1: complete recovery first.`;
-    } else if (brottsFull) {
-      buildBrottHint.textContent = `All Brott slots full (${MAX_BROTTS})`;
-    } else if (canAffordBrott) {
-      buildBrottHint.textContent = `Ready to build (cost ${BROTT_COST} salvage)`;
-    } else {
-      const needB = BROTT_COST - (world.inventory.salvage ?? 0);
-      buildBrottHint.textContent = `Need ${needB} more salvage`;
-    }
-
-    // Surface storm events as log entries (one line per affected turbine).
-    for (const e of world.events) {
-      if (e.kind !== 'storm') continue;
-      if (e.tick <= lastSeenStormTick) continue;
-      if (e.targetId === '') {
-        pushLog(log, `⚡ Storm passed over the island (no turbines hit)`);
-      } else {
-        pushLog(log, `⚡ Storm damaged ${e.targetId} (-${(e.magnitude * 100).toFixed(0)}% health)`);
-      }
-    }
-    if (world.events.length > 0) {
-      lastSeenStormTick = Math.max(lastSeenStormTick, ...world.events.map(e => e.tick));
-    }
-
-    // Build Wind Turbine button
+    const gensFull = gensCount >= MAX_TIDAL_GENERATORS;
+    const canAffordGen = salvage >= TIDAL_GENERATOR_COST;
+    buildBtn.disabled = recovery || !canAffordGen || gensFull;
+    buildBtn.title = '⚡ parasitic powerhouse — needs battery to run';
+    if (recovery) buildHint.textContent = `Phase 1: complete recovery first.`;
+    else if (gensFull) buildHint.textContent = `All generator slots full (${MAX_TIDAL_GENERATORS})`;
+    else if (canAffordGen) buildHint.textContent = `Ready (cost ${TIDAL_GENERATOR_COST}) — ⚡ parasitic`;
+    else buildHint.textContent = `Need ${TIDAL_GENERATOR_COST - salvage} more salvage`;
 
     const windCount = world.structures.filter(s => s.kind === 'wind_turbine').length;
     const windFull = windCount >= MAX_WIND_TURBINES;
-    const canAffordWind = (world.inventory.salvage ?? 0) >= WIND_TURBINE_COST;
+    const canAffordWind = salvage >= WIND_TURBINE_COST;
     buildWindBtn.disabled = recovery || !canAffordWind || windFull;
-    if (recovery) {
-      buildWindHint.textContent = `Phase 1: complete recovery first.`;
-    } else if (windFull) {
-      buildWindHint.textContent = `All wind turbine sites full (${MAX_WIND_TURBINES})`;
-    } else if (canAffordWind) {
-      buildWindHint.textContent = `Ready to build (cost ${WIND_TURBINE_COST} salvage). On-land, variable output.`;
-    } else {
-      const needW = WIND_TURBINE_COST - (world.inventory.salvage ?? 0);
-      buildWindHint.textContent = `Need ${needW} more salvage`;
+    buildWindBtn.title = '🔄 basic, self-sustaining';
+    if (recovery) buildWindHint.textContent = `Phase 1: complete recovery first.`;
+    else if (windFull) buildWindHint.textContent = `All wind slots full (${MAX_WIND_TURBINES})`;
+    else if (canAffordWind) buildWindHint.textContent = `Ready (cost ${WIND_TURBINE_COST}) — 🔄 self-sustaining`;
+    else buildWindHint.textContent = `Need ${WIND_TURBINE_COST - salvage} more salvage`;
+
+    const stationCount = world.structures.filter(s => s.kind === 'recharge_station').length;
+    const stationsFull = stationCount >= MAX_RECHARGE_STATIONS;
+    const canAffordStation = salvage >= RECHARGE_STATION_COST;
+    buildStationBtn.disabled = recovery || !canAffordStation || stationsFull;
+    buildStationBtn.title = 'Adds +1 Brott slot';
+    if (recovery) buildStationHint.textContent = `Phase 1: complete recovery first.`;
+    else if (stationsFull) buildStationHint.textContent = `All station sites full (${MAX_RECHARGE_STATIONS})`;
+    else if (canAffordStation) buildStationHint.textContent = `Ready (cost ${RECHARGE_STATION_COST}) — +1 Brott slot`;
+    else buildStationHint.textContent = `Need ${RECHARGE_STATION_COST - salvage} more salvage`;
+
+    // Brott button needs an open slot
+    const brottsCount = world.brotts.length;
+    const capN = brottCap(world);
+    const slotsOpen = brottsCount < capN;
+    const canAffordBrott = salvage >= BROTT_COST;
+    buildBrottBtn.disabled = recovery || !canAffordBrott || !slotsOpen;
+    if (recovery) buildBrottHint.textContent = `Phase 1: complete recovery first.`;
+    else if (!slotsOpen) {
+      buildBrottHint.textContent = `No empty Brott slot — build a recharge station first`;
+    }
+    else if (canAffordBrott) buildBrottHint.textContent = `Ready (cost ${BROTT_COST})`;
+    else buildBrottHint.textContent = `Need ${BROTT_COST - salvage} more salvage`;
+
+    // Surface events
+    for (const e of world.events) {
+      if (e.kind === 'storm' && e.tick > lastSeenStormTick) {
+        if (e.targetId === '') pushLog(log, `⚡ Storm passed (no turbines hit)`);
+        else pushLog(log, `⚡ Storm damaged ${e.targetId} (-${(e.magnitude * 100).toFixed(0)}% health)`);
+      } else if (e.kind === 'blackout' && e.tick > lastSeenBlackoutTick) {
+        pushLog(log, `⏻ BLACKOUT — ${e.targetId} went offline`);
+      } else if (e.kind === 'restart' && e.tick > lastSeenRestartTick) {
+        pushLog(log, `▶ Restarted ${e.targetId}`);
+      } else if (e.kind === 'brott_died' && e.tick > lastSeenDeathTick) {
+        pushLog(log, `☠ A Brott has died (${e.targetId})`);
+      } else if (e.kind === 'game_over') {
+        pushLog(log, `— GAME OVER (${e.targetId}) —`);
+      }
+    }
+    for (const e of world.events) {
+      if (e.kind === 'storm') lastSeenStormTick = Math.max(lastSeenStormTick, e.tick);
+      if (e.kind === 'blackout') lastSeenBlackoutTick = Math.max(lastSeenBlackoutTick, e.tick);
+      if (e.kind === 'restart') lastSeenRestartTick = Math.max(lastSeenRestartTick, e.tick);
+      if (e.kind === 'brott_died') lastSeenDeathTick = Math.max(lastSeenDeathTick, e.tick);
     }
   }
 
   return { update };
+}
+
+function syncPortraits(row: HTMLDivElement, world: World): void {
+  const stations = world.structures.filter(s => s.kind === 'recharge_station');
+  // Map brotts to their station (or first available)
+  // Pre-cache children
+  const desired = stations.length;
+  while (row.children.length < desired) {
+    const slot = document.createElement('div');
+    slot.className = 'portrait-slot';
+    const bar = document.createElement('div');
+    bar.className = 'portrait-bar';
+    slot.appendChild(bar);
+    row.appendChild(slot);
+  }
+  while (row.children.length > desired) {
+    row.removeChild(row.lastChild!);
+  }
+  for (let i = 0; i < desired; i++) {
+    const slotEl = row.children[i] as HTMLDivElement;
+    const station = stations[i];
+    const brott = world.brotts.find(b => b.stationId === station.id)
+      ?? (i < world.brotts.length && !world.brotts.some(b => b.stationId === stations[i].id) ? world.brotts[i] : undefined);
+    const bar = slotEl.querySelector('.portrait-bar') as HTMLDivElement;
+
+    if (!station.online) {
+      slotEl.dataset.state = 'station-off';
+      slotEl.textContent = '⏻';
+      slotEl.appendChild(bar);
+      bar.style.width = '0%';
+    } else if (!brott) {
+      slotEl.dataset.state = 'empty';
+      slotEl.textContent = '+';
+      slotEl.appendChild(bar);
+      slotEl.title = 'Empty slot — build a Brott to fill';
+      bar.style.width = '0%';
+    } else {
+      slotEl.dataset.state = 'filled';
+      slotEl.textContent = brott.name.replace(/^Brott-?0*/, 'B') || 'B';
+      slotEl.appendChild(bar);
+      bar.style.width = `${(brott.energy * 100).toFixed(0)}%`;
+      slotEl.title = `${brott.name} — energy ${(brott.energy * 100).toFixed(0)}% — task ${brott.task.kind}`;
+    }
+    // tombstone if brott died this session and slot is empty? (we don't track death-per-slot;
+    // empty slot is sufficient visual)
+  }
 }
 
 function syncBrottRows(
@@ -190,14 +281,12 @@ function syncBrottRows(
       cache.set(b.id, row);
       list.appendChild(row.el);
     }
-    // Update text only if not currently being edited
     if (!row.nameEl.classList.contains('editing')) {
       if (row.nameEl.textContent !== b.name) row.nameEl.textContent = b.name;
     }
     row.metaEl.textContent = `${(b.energy * 100).toFixed(0)}%  ${b.task.kind}`;
     if (row.jobEl.value !== b.job) row.jobEl.value = b.job;
   }
-  // Remove rows for departed brotts
   for (const [id, row] of cache) {
     if (!seen.has(id)) {
       row.el.remove();
@@ -218,7 +307,6 @@ function createBrottRow(brott: Brott): RowCache {
   nameSpan.textContent = brott.name;
   nameSpan.title = 'Click to rename';
   nameSpan.addEventListener('click', () => startEdit(nameSpan, brott));
-
   left.appendChild(nameSpan);
 
   const meta = document.createElement('span');
@@ -227,7 +315,6 @@ function createBrottRow(brott: Brott): RowCache {
 
   li.appendChild(left);
 
-  // Active Jobs dropdown
   const jobSel = document.createElement('select');
   jobSel.className = 'job-select';
   const jobOptions: { value: Job; label: string }[] = [
@@ -264,9 +351,7 @@ function startEdit(nameSpan: HTMLSpanElement, brott: Brott): void {
 
   const commit = (save: boolean) => {
     const next = save ? input.value.trim() : original;
-    if (save && next.length > 0) {
-      brott.name = next;
-    }
+    if (save && next.length > 0) brott.name = next;
     nameSpan.textContent = brott.name;
     nameSpan.classList.remove('editing');
     input.remove();
@@ -298,7 +383,7 @@ function syncStructureRows(
       cache.set(s.id, row);
       list.appendChild(row.el);
     }
-    row.metaEl.textContent = `tier ${s.tier}`;
+    row.metaEl.textContent = metaFor(s);
     const status = statusFor(s);
     row.statusEl.textContent = status;
     row.statusEl.dataset.status = status.toLowerCase();
@@ -338,21 +423,29 @@ function createStructRow(s: Structure): StructRowCache {
 
 function labelFor(s: Structure): string {
   switch (s.kind) {
-    case 'tidal_generator': return `Tidal Generator (${s.id})`;
-    case 'wind_turbine': return `Wind Turbine (${s.id})`;
-    case 'charger': return `Charger (${s.id})`;
-    case 'intake': return `Water Intake (${s.id})`;
+    case 'tidal_generator': return `⚡ Tidal (${s.id})`;
+    case 'wind_turbine': return `🔄 Wind (${s.id})`;
+    case 'recharge_station': return s.solar ? `☀️ Station (${s.id})` : `Station (${s.id})`;
+    case 'intake': return `Intake (${s.id})`;
   }
+}
+
+function metaFor(s: Structure): string {
+  if (s.kind === 'tidal_generator' || s.kind === 'wind_turbine') {
+    return `health ${(s.health * 100).toFixed(0)}%  fouling ${(s.fouling * 100).toFixed(0)}%`;
+  }
+  return `health ${(s.health * 100).toFixed(0)}%`;
 }
 
 function statusFor(s: Structure): string {
   if (s.health < 0.8) return 'Broken';
+  if (!s.online) return 'Offline';
   if (s.kind === 'tidal_generator' || s.kind === 'wind_turbine') {
     if (s.fouling >= 0.5) return 'Fouled';
     return 'Active';
   }
-  if (s.kind === 'charger') return 'Active';
-  if (s.kind === 'intake') return 'Idle';
+  if (s.kind === 'recharge_station') return 'Active';
+  if (s.kind === 'intake') return 'Active';
   return 'Idle';
 }
 
@@ -361,7 +454,6 @@ function pushLog(log: HTMLDivElement, msg: string): void {
   line.className = 'log-line';
   line.textContent = msg;
   log.appendChild(line);
-  // Cap at 8 lines
-  while (log.childNodes.length > 8) log.removeChild(log.firstChild!);
+  while (log.childNodes.length > 10) log.removeChild(log.firstChild!);
   log.scrollTop = log.scrollHeight;
 }

@@ -26,7 +26,7 @@ const TICKS_PER_FRAME = 1;
 
 function frame(): void {
   for (let i = 0; i < TICKS_PER_FRAME; i++) tick(world, config, rng);
-  render(ctx, world, mouse);
+  render(ctx, world, mouse, config);
   dashboard.update();
   requestAnimationFrame(frame);
 }

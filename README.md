@@ -1,6 +1,14 @@
 # brott-island
 
-A cozy robot island sim. Brotts maintain a multi-source power station on a small temperate-green coastal island, balancing tidal, wave, wind, and geothermal generation against weather, equipment wear, and a mainland power commitment.
+A cozy robot island sim. Brotts maintain a battery-powered island, balancing wind + tidal generation, parasitic loads, and a single shared battery against weather, equipment wear, and blackout risk.
+
+## Phase C (2026-05-29): Battery + blackout + restart
+
+The island runs on **one shared battery**. Wind turbines (basic, self-sustaining) and the seed solar recharge station produce trickle power that's always available. Tidal generators are powerhouses but carry a parasitic load — when the battery hits zero, they cascade offline (`blackout`) and stay off until a Brott walks over and uses the new **restart** verb. Game-over only if there are zero basic producers AND the battery is empty.
+
+**Brott population cap = recharge station count.** The starter solar station ships with a panel on top (☀️) and never goes offline. Plain stations are parasitic. Building a new station unlocks one more Brott slot.
+
+**Primary eval score:** `ticksSurvived` (cap 50k = won). Secondary: mean Brotts alive over the run.
 
 ## What it is
 

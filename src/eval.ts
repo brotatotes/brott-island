@@ -1,4 +1,4 @@
-// Sim-eval CLI. Runs N seeds x variants and reports aggregate metrics.
+// Sim-eval CLI. Phase C: ranks variants by ticks survived (cap = ticks).
 //
 // Usage:
 //   npm run eval -- --variants eval-variants.json --seeds 8 --ticks 50000 --out eval-results/
@@ -36,21 +36,23 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--ticks') ticks = parseInt(argv[++i], 10);
     else if (a === '--out') outDir = argv[++i];
   }
-  if (!variantsPath) {
-    throw new Error('--variants <path> required');
-  }
+  if (!variantsPath) throw new Error('--variants <path> required');
   const seeds = DEFAULT_SEEDS.slice(0, seedsCount);
   return { variantsPath, seeds, ticks, outDir };
 }
 
 interface SeedRun {
   seed: number;
-  delivered: number;
-  generated: number;
-  uptimePct: number;
+  ticksSurvived: number;
+  meanBrottsAlive: number;
+  blackouts: number;
+  restarts: number;
+  deaths: number;
   finalBrotts: number;
   finalGens: number;
-  finalSalvage: number;
+  finalStations: number;
+  wasted: number;
+  gameOver: boolean;
 }
 
 interface VariantResult {
@@ -58,11 +60,12 @@ interface VariantResult {
   policy: AutoBuildPolicy;
   config?: Partial<SimConfig>;
   perSeed: SeedRun[];
-  meanDelivered: number;
-  stdDelivered: number;
-  meanUptimePct: number;
-  meanFinalBrotts: number;
-  meanFinalGens: number;
+  meanSurvived: number;
+  stdSurvived: number;
+  meanBrottAlive: number;
+  meanBlackouts: number;
+  meanDeaths: number;
+  winRate: number; // fraction reaching tick cap
   vsBaselinePct?: number;
 }
 
@@ -72,7 +75,6 @@ function mean(xs: number[]): number {
   for (const x of xs) s += x;
   return s / xs.length;
 }
-
 function stddev(xs: number[]): number {
   if (xs.length < 2) return 0;
   const m = mean(xs);
@@ -90,54 +92,58 @@ function runVariant(variant: Variant, seeds: number[], ticks: number): VariantRe
     };
     const { world, rng, config } = createWorld({ seed, config: configOverride });
     run(world, config, rng, ticks);
-    const gens = world.structures.filter(s => s.kind === 'tidal_generator' || s.kind === 'wind_turbine').length;
+    const survived = world.metrics.ticksSurvived;
+    const meanBrottsAlive = survived > 0 ? world.metrics.brottTickAliveSum / survived : 0;
     perSeed.push({
       seed,
-      delivered: world.metrics.totalPowerDelivered,
-      generated: world.metrics.totalPowerGenerated,
-      uptimePct: (100 * world.metrics.ticksAtFullOutput) / ticks,
+      ticksSurvived: survived,
+      meanBrottsAlive,
+      blackouts: world.metrics.blackouts,
+      restarts: world.metrics.restarts,
+      deaths: world.metrics.deaths,
       finalBrotts: world.brotts.length,
-      finalGens: gens,
-      finalSalvage: world.inventory.salvage ?? 0,
+      finalGens: world.structures.filter(s => s.kind === 'tidal_generator' || s.kind === 'wind_turbine').length,
+      finalStations: world.structures.filter(s => s.kind === 'recharge_station').length,
+      wasted: world.metrics.totalPowerWasted,
+      gameOver: world.gameOver,
     });
   }
-  const delivered = perSeed.map(s => s.delivered);
+  const survived = perSeed.map(s => s.ticksSurvived);
   return {
     name: variant.name,
     policy: variant.policy,
     config: variant.config,
     perSeed,
-    meanDelivered: mean(delivered),
-    stdDelivered: stddev(delivered),
-    meanUptimePct: mean(perSeed.map(s => s.uptimePct)),
-    meanFinalBrotts: mean(perSeed.map(s => s.finalBrotts)),
-    meanFinalGens: mean(perSeed.map(s => s.finalGens)),
+    meanSurvived: mean(survived),
+    stdSurvived: stddev(survived),
+    meanBrottAlive: mean(perSeed.map(s => s.meanBrottsAlive)),
+    meanBlackouts: mean(perSeed.map(s => s.blackouts)),
+    meanDeaths: mean(perSeed.map(s => s.deaths)),
+    winRate: perSeed.filter(s => !s.gameOver).length / perSeed.length,
   };
 }
 
 function getGitSha(): string {
-  try {
-    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
-  } catch {
-    return 'unknown';
-  }
+  try { return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim(); } catch { return 'unknown'; }
 }
 
 function formatMarkdown(results: VariantResult[], ticks: number, seeds: number[]): string {
   const lines: string[] = [];
-  lines.push(`# Sim-eval results`);
+  lines.push(`# Sim-eval results (Phase C: survival)`);
   lines.push(``);
   lines.push(`- ticks per run: ${ticks}`);
   lines.push(`- seeds: ${seeds.join(', ')}`);
+  lines.push(`- primary score: ticks survived (cap = ${ticks} = "won")`);
   lines.push(``);
-  lines.push(`| variant | mean delivered | std | vs baseline | mean uptime % | mean brotts | mean gens |`);
-  lines.push(`| --- | ---: | ---: | ---: | ---: | ---: | ---: |`);
-  for (const r of results) {
-    const vs = r.vsBaselinePct === undefined
-      ? '—'
+  lines.push(`| variant | mean survived | std | win rate | mean Brotts | blackouts | deaths | vs baseline |`);
+  lines.push(`| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |`);
+  // Sort by survival descending for the digest.
+  const sorted = [...results].sort((a, b) => b.meanSurvived - a.meanSurvived);
+  for (const r of sorted) {
+    const vs = r.vsBaselinePct === undefined ? '—'
       : `${r.vsBaselinePct >= 0 ? '+' : ''}${r.vsBaselinePct.toFixed(1)}%`;
     lines.push(
-      `| ${r.name} | ${r.meanDelivered.toFixed(0)} | ${r.stdDelivered.toFixed(0)} | ${vs} | ${r.meanUptimePct.toFixed(1)} | ${r.meanFinalBrotts.toFixed(1)} | ${r.meanFinalGens.toFixed(1)} |`,
+      `| ${r.name} | ${r.meanSurvived.toFixed(0)} | ${r.stdSurvived.toFixed(0)} | ${(r.winRate * 100).toFixed(0)}% | ${r.meanBrottAlive.toFixed(1)} | ${r.meanBlackouts.toFixed(1)} | ${r.meanDeaths.toFixed(1)} | ${vs} |`,
     );
   }
   return lines.join('\n');
@@ -153,17 +159,13 @@ function main(): void {
 
   const t0 = Date.now();
   const results: VariantResult[] = [];
-  for (const v of variants) {
-    const r = runVariant(v, args.seeds, args.ticks);
-    results.push(r);
-  }
+  for (const v of variants) results.push(runVariant(v, args.seeds, args.ticks));
   const elapsedMs = Date.now() - t0;
 
-  // vs-baseline %.
-  const baseline = results[0];
+  const baseline = results.find(r => r.name === 'baseline') ?? results[0];
   for (const r of results) {
-    if (baseline.meanDelivered > 0) {
-      r.vsBaselinePct = (100 * (r.meanDelivered - baseline.meanDelivered)) / baseline.meanDelivered;
+    if (baseline.meanSurvived > 0) {
+      r.vsBaselinePct = (100 * (r.meanSurvived - baseline.meanSurvived)) / baseline.meanSurvived;
     }
   }
 

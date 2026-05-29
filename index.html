@@ -12,9 +12,8 @@
       canvas { background: #1a2228; border: 1px solid #2a363d; image-rendering: pixelated; }
       .hud { font-size: 12px; color: #8aa39b; white-space: pre; }
 
-      /* Dashboard */
       #dashboard {
-        width: 280px;
+        width: 300px;
         font-size: 12px;
         color: #cfd8d3;
         background: #131c22;
@@ -24,7 +23,7 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
-        max-height: 400px;
+        max-height: 560px;
         overflow-y: auto;
       }
       #dashboard h3 {
@@ -37,6 +36,95 @@
         border-bottom: 1px solid #2a363d;
         padding-bottom: 3px;
       }
+
+      /* --- Battery + portraits header --- */
+      .battery-block {
+        display: flex; flex-direction: row; align-items: center; gap: 12px;
+        background: #0f171c; border: 1px solid #1f2a31; padding: 8px 10px;
+      }
+      #battery-shell {
+        position: relative;
+        width: 48px; height: 90px;
+        border: 2px solid #cfd8d3;
+        border-radius: 4px;
+        background: #0d1418;
+        overflow: hidden;
+        transition: border-color 0.2s;
+      }
+      #battery-shell::before {
+        content: '';
+        position: absolute; top: -7px; left: 14px;
+        width: 16px; height: 5px;
+        background: #cfd8d3;
+        border-radius: 2px 2px 0 0;
+      }
+      #battery-shell[data-zone="red"] { border-color: #c85a5a; animation: pulse-red 1.2s ease-in-out infinite; }
+      #battery-shell.shake { animation: shake 0.6s ease-in-out; }
+      @keyframes pulse-red {
+        0%, 100% { box-shadow: 0 0 4px rgba(200,90,90,0.3); }
+        50%      { box-shadow: 0 0 16px rgba(200,90,90,0.9); }
+      }
+      @keyframes shake {
+        0%,100% { transform: translateX(0); }
+        20%     { transform: translateX(-4px); }
+        40%     { transform: translateX(4px); }
+        60%     { transform: translateX(-2px); }
+        80%     { transform: translateX(2px); }
+      }
+      #battery-fill {
+        position: absolute; bottom: 0; left: 0; right: 0;
+        background: #5aa37a;
+        transition: height 0.3s ease, background 0.3s;
+      }
+      #battery-fill[data-zone="green"]  { background: #5aa37a; }
+      #battery-fill[data-zone="yellow"] { background: #d4b256; }
+      #battery-fill[data-zone="red"]    { background: #c85a5a; }
+      .battery-info { display: flex; flex-direction: column; gap: 4px; }
+      #battery-label { font-size: 18px; color: #e8d97a; font-weight: bold; }
+      #battery-rate { font-size: 11px; color: #8aa39b; }
+      .battery-cap { font-size: 10px; color: #5a6a6e; }
+
+      /* --- Brott portrait row --- */
+      .portraits-block { display: flex; flex-direction: column; gap: 4px; }
+      #brott-portraits {
+        display: flex; flex-direction: row; flex-wrap: wrap; gap: 4px;
+      }
+      .portrait-slot {
+        position: relative;
+        width: 36px; height: 36px;
+        background: #0f171c;
+        border: 1px dashed #2a363d;
+        color: #5a6a6e;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px;
+        overflow: hidden;
+      }
+      .portrait-slot[data-state="filled"] {
+        border: 1px solid #5a7d4a;
+        background: #1a2820;
+        color: #e8d97a;
+      }
+      .portrait-slot[data-state="empty"] {
+        border: 1px dashed #d4b256;
+        color: #d4b256;
+        animation: empty-pulse 1.8s ease-in-out infinite;
+      }
+      .portrait-slot[data-state="station-off"] {
+        border: 1px solid #5a2e2e;
+        background: #1a1212;
+        color: #c85a5a;
+        opacity: 0.6;
+      }
+      @keyframes empty-pulse {
+        0%,100% { box-shadow: inset 0 0 0 0 rgba(212,178,86,0); }
+        50%     { box-shadow: inset 0 0 0 2px rgba(212,178,86,0.5); }
+      }
+      .portrait-bar {
+        position: absolute; bottom: 0; left: 0; height: 3px;
+        background: #5aa37a;
+        transition: width 0.2s;
+      }
+
       .metrics { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
       .metrics .k { color: #8aa39b; }
       .metrics .v { color: #e8d97a; text-align: right; }
@@ -45,9 +133,7 @@
 
       .roster-row, .struct-row {
         display: flex; flex-direction: row; align-items: center; justify-content: space-between;
-        background: #0f171c;
-        padding: 4px 6px;
-        border: 1px solid #1f2a31;
+        background: #0f171c; padding: 4px 6px; border: 1px solid #1f2a31;
       }
       .roster-left, .struct-left { display: flex; flex-direction: column; min-width: 0; }
       .roster-name { color: #e8d97a; cursor: pointer; }
@@ -56,69 +142,37 @@
       .roster-meta, .struct-meta { color: #8aa39b; font-size: 10px; }
       .struct-name { color: #cfd8d3; }
       .struct-status {
-        font-size: 10px;
-        padding: 1px 6px;
-        border: 1px solid #2a363d;
-        color: #8aa39b;
+        font-size: 10px; padding: 1px 6px; border: 1px solid #2a363d; color: #8aa39b;
       }
       .struct-status[data-status="active"] { color: #7aa3c8; border-color: #2f4651; }
       .struct-status[data-status="fouled"] { color: #c87a5a; border-color: #5a3a2e; }
       .struct-status[data-status="broken"] { color: #c85a5a; border-color: #5a2e2e; }
+      .struct-status[data-status="offline"] { color: #d4b256; border-color: #5a4a2e; }
       .struct-status[data-status="idle"] { color: #8aa39b; }
 
       .rename-input {
-        background: #0d1418;
-        color: #e8d97a;
-        border: 1px solid #5a7d4a;
-        font-family: inherit;
-        font-size: 12px;
-        padding: 1px 4px;
-        width: 130px;
-        outline: none;
+        background: #0d1418; color: #e8d97a; border: 1px solid #5a7d4a;
+        font-family: inherit; font-size: 12px; padding: 1px 4px; width: 130px; outline: none;
       }
       .job-select {
-        background: #0d1418;
-        color: #cfd8d3;
-        border: 1px solid #2a363d;
-        font-family: inherit;
-        font-size: 10px;
-        padding: 0 2px;
-      }
-      .job-select:disabled {
-        color: #5a6a6e;
-        opacity: 0.5;
+        background: #0d1418; color: #cfd8d3; border: 1px solid #2a363d;
+        font-family: inherit; font-size: 10px; padding: 0 2px;
       }
 
       .build-row { display: flex; flex-direction: column; gap: 4px; }
-      #build-gen, #build-brott, #build-wind {
-        background: #2a4a3a;
-        color: #cfd8d3;
-        border: 1px solid #5a7d4a;
-        font-family: inherit;
-        font-size: 12px;
-        padding: 6px 8px;
-        cursor: pointer;
+      button.build-btn {
+        background: #2a4a3a; color: #cfd8d3; border: 1px solid #5a7d4a;
+        font-family: inherit; font-size: 12px; padding: 6px 8px; cursor: pointer;
       }
-      #build-gen:hover:not(:disabled), #build-brott:hover:not(:disabled), #build-wind:hover:not(:disabled) { background: #355d48; }
-      #build-gen:disabled, #build-brott:disabled, #build-wind:disabled {
-        background: #1a2228;
-        color: #5a6a6e;
-        border-color: #2a363d;
-        cursor: not-allowed;
+      button.build-btn:hover:not(:disabled) { background: #355d48; }
+      button.build-btn:disabled {
+        background: #1a2228; color: #5a6a6e; border-color: #2a363d; cursor: not-allowed;
       }
-      #build-hint, #build-brott-hint, #build-wind-hint { font-size: 10px; color: #8aa39b; }
-
-      .jobs-placeholder { color: #5a6a6e; font-style: italic; font-size: 11px; }
+      .build-hint { font-size: 10px; color: #8aa39b; }
 
       #event-log {
-        background: #0f171c;
-        border: 1px solid #1f2a31;
-        padding: 4px 6px;
-        font-size: 10px;
-        color: #8aa39b;
-        min-height: 14px;
-        max-height: 70px;
-        overflow-y: auto;
+        background: #0f171c; border: 1px solid #1f2a31; padding: 4px 6px;
+        font-size: 10px; color: #8aa39b; min-height: 14px; max-height: 80px; overflow-y: auto;
       }
       .log-line { line-height: 1.4; }
     </style>
@@ -128,17 +182,29 @@
       <div class="stage-row">
         <canvas id="stage" width="640" height="400"></canvas>
         <aside id="dashboard">
+
+          <section class="battery-block">
+            <div id="battery-shell">
+              <div id="battery-fill" data-zone="green" style="height: 0%"></div>
+            </div>
+            <div class="battery-info">
+              <div id="battery-label">0%</div>
+              <div id="battery-rate">▲ 0.0 kW</div>
+              <div class="battery-cap">battery</div>
+            </div>
+          </section>
+
+          <section class="portraits-block">
+            <h3>Brott Colony</h3>
+            <div id="brott-portraits"></div>
+          </section>
+
           <section>
             <h3>Status</h3>
             <div class="metrics">
-              <span class="k">tick</span><span class="v" id="m-tick">0</span>
+              <span class="k">survived</span><span class="v" id="m-survived">0</span>
               <span class="k">phase</span><span class="v" id="m-phase">recovery</span>
-              <span class="k">power</span><span class="v" id="m-power">0</span>
-              <span class="k">delivered</span><span class="v" id="m-delivered">0 kWh</span>
               <span class="k">salvage</span><span class="v" id="m-salvage">0</span>
-              <span class="k">fouling</span><span class="v" id="m-fouling">0%</span>
-              <span class="k">brott energy</span><span class="v" id="m-energy">—</span>
-              <span class="k">task</span><span class="v" id="m-task">—</span>
             </div>
           </section>
 
@@ -155,18 +221,15 @@
           <section>
             <h3>Build</h3>
             <div class="build-row">
-              <button id="build-gen" type="button" disabled>Build Tidal Generator (cost: 50 salvage)</button>
-              <span id="build-hint">Need 50 more salvage</span>
-              <button id="build-wind" type="button" disabled>Build Wind Turbine (cost: 35 salvage)</button>
-              <span id="build-wind-hint">Need 35 more salvage</span>
-              <button id="build-brott" type="button" disabled>Build Brott (cost: 100 salvage)</button>
-              <span id="build-brott-hint">Need 100 more salvage</span>
+              <button id="build-station" class="build-btn" type="button" disabled>Build Recharge Station (60 salvage, +1 Brott slot)</button>
+              <span id="build-station-hint" class="build-hint">Need 60 more salvage</span>
+              <button id="build-wind" class="build-btn" type="button" disabled>Build Wind Turbine (30 salvage) 🔄</button>
+              <span id="build-wind-hint" class="build-hint">Need 30 more salvage</span>
+              <button id="build-gen" class="build-btn" type="button" disabled>Build Tidal Generator (50 salvage) ⚡</button>
+              <span id="build-hint" class="build-hint">Need 50 more salvage</span>
+              <button id="build-brott" class="build-btn" type="button" disabled>Build Brott (100 salvage)</button>
+              <span id="build-brott-hint" class="build-hint">Need 100 more salvage</span>
             </div>
-          </section>
-
-          <section>
-            <h3>Jobs</h3>
-            <div class="jobs-placeholder">Assign each Brott a role from the roster above.</div>
           </section>
 
           <section>

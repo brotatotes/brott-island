@@ -1,6 +1,7 @@
 // Canvas 2D rendering. Reads world state, never mutates it.
 
-import { World, Brott, Structure, Debris, Vec2 } from '../sim/types';
+import { World, Brott, Structure, Debris, Vec2, SimConfig, DEFAULT_CONFIG } from '../sim/types';
+import { windFactor } from '../sim/world';
 
 const COLORS = {
   water: '#1a3a4a',
@@ -11,7 +12,9 @@ const COLORS = {
   shoreLine: '#8a7e5e',
   brott: '#e8d97a',
   brottLow: '#c87a5a',
-  charger: '#5aa37a',
+  station: '#5aa37a',
+  solarPanel: '#3a5a8a',
+  solarPanelGlint: '#a3c8e8',
   generator: '#7aa3c8',
   generatorDirty: '#a36e5a',
   windTurbine: '#cfd8d3',
@@ -24,19 +27,17 @@ const COLORS = {
 const TILE = 16;
 const SHORE_TILE_X = 24;
 
-// Hit target for hover detection. Records what's at a screen position.
 export type HoverTarget =
   | { kind: 'brott'; ref: Brott }
   | { kind: 'structure'; ref: Structure }
   | { kind: 'debris'; ref: Debris };
 
 export function hitTest(world: World, px: number, py: number): HoverTarget | null {
-  // Brotts first (drawn on top, most expected hover target)
   for (const b of world.brotts) {
     if (within(b.pos, px, py, 7)) return { kind: 'brott', ref: b };
   }
   for (const s of world.structures) {
-    const r = s.kind === 'intake' ? 8 : s.kind === 'charger' ? 10 : s.kind === 'wind_turbine' ? 10 : 12;
+    const r = s.kind === 'intake' ? 8 : s.kind === 'recharge_station' ? 10 : s.kind === 'wind_turbine' ? 10 : 12;
     if (within(s.pos, px, py, r)) return { kind: 'structure', ref: s };
   }
   for (const d of world.debris) {
@@ -59,60 +60,50 @@ export function tooltipFor(target: HoverTarget, world: World): string[] {
         b.name,
         `energy   ${(b.energy * 100).toFixed(0)}%`,
         `task     ${b.task.kind}`,
-        `can do   ${b.capabilities.join(', ')}`,
       ];
     }
     case 'structure': {
       const s = target.ref;
+      const status = !s.online ? '⏻ OFFLINE — needs restart' : s.health < 0.8 ? '✗ BROKEN — needs repair' : 'Online';
       if (s.kind === 'tidal_generator') {
         const out = s.outputBase * (1 - s.fouling) * s.health;
         return [
-          `Tidal Generator (${s.id})`,
-          `output   ${out.toFixed(0)} / ${s.outputBase} kW`,
+          `Tidal Generator (${s.id})  ⚡ parasitic`,
+          status,
+          `output   ${s.online ? out.toFixed(0) : 0} / ${s.outputBase} kW`,
           `fouling  ${(s.fouling * 100).toFixed(0)}%`,
           `health   ${(s.health * 100).toFixed(0)}%`,
-          `tier     ${s.tier}`,
         ];
       }
       if (s.kind === 'wind_turbine') {
-        // Read live wind from world.tick (purely cosmetic; sim is authoritative).
-        const TWO_PI = Math.PI * 2;
-        const slow = Math.sin((world.tick / 700) * TWO_PI);
-        const fast = Math.sin((world.tick / 137) * TWO_PI + 1.3);
-        let wind = 0.5 + 0.3 * slow + 0.2 * fast;
-        if (wind < 0.1) wind = 0.1; if (wind > 1) wind = 1;
-        const out = s.outputBase * (1 - s.fouling) * s.health * wind;
+        const wind = windFactor(world.tick, 0.7);
+        const out = s.online ? s.outputBase * (1 - s.fouling) * s.health * wind : 0;
         return [
-          `Wind Turbine (${s.id})`,
+          `Wind Turbine (${s.id})  🔄 basic`,
+          status,
           `output   ${out.toFixed(0)} / ${s.outputBase} kW`,
           `wind     ${(wind * 100).toFixed(0)}%`,
-          `fouling  ${(s.fouling * 100).toFixed(0)}%`,
           `health   ${(s.health * 100).toFixed(0)}%`,
-          `tier     ${s.tier}`,
         ];
       }
-      if (s.kind === 'charger') {
+      if (s.kind === 'recharge_station') {
         return [
-          `Charger (${s.id})`,
-          `Brotts return here to refill energy.`,
+          `Recharge Station (${s.id})${s.solar ? '  ☀️ solar' : ''}`,
+          status,
+          s.solar ? `Brott home base. Never offline.` : `Brott recharge bay.`,
         ];
       }
       if (s.kind === 'intake') {
-        const debrisCount = world.debris.length;
         return [
           `Water Intake (${s.id})`,
+          status,
           `Debris washes up here.`,
-          `current   ${debrisCount} piece${debrisCount === 1 ? '' : 's'}`,
         ];
       }
       return [s.kind];
     }
     case 'debris': {
-      return [
-        `Debris`,
-        `Driftwood and kelp.`,
-        `yields    +1 salvage when collected`,
-      ];
+      return [`Debris`, `Driftwood and kelp.`, `yields    +1 salvage when collected`];
     }
   }
 }
@@ -121,6 +112,7 @@ export function render(
   ctx: CanvasRenderingContext2D,
   world: World,
   mouse: { x: number; y: number; inside: boolean } | null,
+  config: SimConfig = DEFAULT_CONFIG,
 ): void {
   const { width, height } = ctx.canvas;
   const shorePx = SHORE_TILE_X * TILE;
@@ -181,38 +173,70 @@ export function render(
     const px = s.pos.x * TILE;
     const py = s.pos.y * TILE;
     const broken = s.health < 0.8;
+    const offline = !s.online && !broken;
+    // Desaturate offline buildings (broken already gets red X + alpha)
     if (broken) ctx.globalAlpha = 0.45;
-    if (s.kind === 'charger') {
-      ctx.fillStyle = COLORS.charger;
+    else if (offline) ctx.globalAlpha = 0.55;
+
+    if (s.kind === 'recharge_station') {
+      // Base
+      ctx.fillStyle = COLORS.station;
       ctx.fillRect(px - 8, py - 8, 16, 16);
       ctx.fillStyle = '#0d1418';
       ctx.fillRect(px - 4, py - 4, 8, 2);
+      if (s.solar) {
+        // Solar panel on top — wide flat dark-blue slab with glint
+        ctx.fillStyle = COLORS.solarPanel;
+        ctx.fillRect(px - 11, py - 16, 22, 6);
+        ctx.fillStyle = COLORS.solarPanelGlint;
+        // grid cells
+        for (let i = 0; i < 4; i++) {
+          ctx.fillRect(px - 10 + i * 5, py - 15, 4, 4);
+        }
+        // subtle sun ray
+        ctx.strokeStyle = 'rgba(232, 217, 122, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 22);
+        ctx.lineTo(px, py - 18);
+        ctx.stroke();
+      }
     } else if (s.kind === 'tidal_generator') {
       const dirty = s.fouling;
       ctx.fillStyle = '#2a363d';
       ctx.fillRect(px - 12, py - 12, 24, 24);
-      ctx.fillStyle = lerpColor(COLORS.generator, COLORS.generatorDirty, dirty);
+      // Desaturate generator color when offline.
+      const baseCol = offline ? '#5a6a6e' : lerpColor(COLORS.generator, COLORS.generatorDirty, dirty);
+      ctx.fillStyle = baseCol;
       ctx.fillRect(px - 10, py - 10, 20, 20);
       ctx.fillStyle = '#0d1418';
       ctx.fillRect(px - 10, py + 12, 20, 3);
-      ctx.fillStyle = COLORS.generator;
-      ctx.fillRect(px - 10, py + 12, 20 * (1 - dirty), 3);
+      if (s.online) {
+        ctx.fillStyle = COLORS.generator;
+        ctx.fillRect(px - 10, py + 12, 20 * (1 - dirty), 3);
+      }
+      // ⚡ marker: tidal = parasitic. Always visible (when not broken).
+      if (!broken) {
+        drawBolt(ctx, px + 9, py - 11, world);
+      }
+      // Battery warning glow when low + tidal still online
+      if (s.online && world.inventory.power / config.batteryCapacity < 0.3) {
+        const pulse = 0.4 + 0.3 * Math.sin(world.tick * 0.2);
+        ctx.strokeStyle = `rgba(200, 90, 90, ${pulse.toFixed(2)})`;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(px - 13, py - 13, 26, 26);
+        ctx.lineWidth = 1;
+      }
     } else if (s.kind === 'wind_turbine') {
-      // Tower
       ctx.fillStyle = '#3a4651';
       ctx.fillRect(px - 2, py - 4, 4, 16);
-      // Hub
       const dirty = s.fouling;
       ctx.fillStyle = lerpColor(COLORS.windTurbine, COLORS.windTurbineDirty, dirty);
       ctx.beginPath();
       ctx.arc(px, py - 4, 3, 0, Math.PI * 2);
       ctx.fill();
-      // Blades — spin speed driven by current wind factor
       const TWO_PI = Math.PI * 2;
-      const slow = Math.sin((world.tick / 700) * TWO_PI);
-      const fast = Math.sin((world.tick / 137) * TWO_PI + 1.3);
-      let wind = 0.5 + 0.3 * slow + 0.2 * fast;
-      if (wind < 0.1) wind = 0.1; if (wind > 1) wind = 1;
+      const wind = windFactor(world.tick, 0.7);
       const ang = world.tick * 0.25 * wind;
       ctx.strokeStyle = lerpColor(COLORS.windTurbineBlade, COLORS.windTurbineDirty, dirty);
       ctx.lineWidth = 1.5;
@@ -224,12 +248,15 @@ export function render(
         ctx.stroke();
       }
       ctx.lineWidth = 1;
-      // Output bar at base
       const eff = (1 - dirty) * s.health * wind;
       ctx.fillStyle = '#0d1418';
       ctx.fillRect(px - 10, py + 12, 20, 3);
       ctx.fillStyle = COLORS.windTurbineBlade;
       ctx.fillRect(px - 10, py + 12, 20 * eff, 3);
+      // 🔄 marker: wind = basic / self-sustaining.
+      if (!broken) {
+        drawGear(ctx, px + 9, py - 13);
+      }
     } else if (s.kind === 'intake') {
       ctx.fillStyle = COLORS.intake;
       ctx.beginPath();
@@ -240,14 +267,29 @@ export function render(
       ctx.arc(px, py, 10 + Math.sin(t * 1.5) * 1.5, 0, Math.PI * 2);
       ctx.stroke();
     }
+
+    ctx.globalAlpha = 1;
+
     if (broken) {
-      ctx.globalAlpha = 1;
-      // Small red broken indicator (X)
       ctx.strokeStyle = '#c85a5a';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(px + 6, py - 14); ctx.lineTo(px + 12, py - 8);
       ctx.moveTo(px + 12, py - 14); ctx.lineTo(px + 6, py - 8);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+    if (offline) {
+      // Pulsing ⏻ power-button icon: "restart me"
+      const pulse = 0.5 + 0.4 * Math.sin(world.tick * 0.12);
+      const r = 7;
+      ctx.strokeStyle = `rgba(232, 217, 122, ${pulse.toFixed(2)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py - 22, r, 0.7 * Math.PI, 0.3 * Math.PI, false);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px, py - 22 - r); ctx.lineTo(px, py - 22 - 1);
       ctx.stroke();
       ctx.lineWidth = 1;
     }
@@ -279,26 +321,86 @@ export function render(
     ctx.fillRect(px - 8, py - 12, 16 * b.energy, 3);
   }
 
+  // --- Low-battery vignette ---
+  const batteryFrac = world.inventory.power / config.batteryCapacity;
+  if (batteryFrac < 0.2) {
+    const dim = (0.2 - batteryFrac) / 0.2; // 0..1 darkening intensity
+    const grad = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.3, width / 2, height / 2, Math.max(width, height) * 0.7);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, `rgba(0,0,0,${(0.55 * dim).toFixed(2)})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  // --- Game over overlay ---
+  if (world.gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = '#e8d97a';
+    ctx.font = 'bold 28px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('— GAME OVER —', width / 2, height / 2 - 8);
+    ctx.font = '13px ui-monospace, monospace';
+    ctx.fillStyle = '#cfd8d3';
+    ctx.fillText(`Survived ${world.metrics.ticksSurvived} ticks`, width / 2, height / 2 + 16);
+    ctx.textAlign = 'start';
+  }
+
   // --- Hover ring + tooltip ---
   if (mouse && mouse.inside) {
     const hit = hitTest(world, mouse.x, mouse.y);
     if (hit) {
-      const pos =
-        hit.kind === 'brott' ? hit.ref.pos :
-        hit.kind === 'structure' ? hit.ref.pos :
-        hit.ref.pos;
+      const pos = hit.kind === 'brott' ? hit.ref.pos
+        : hit.kind === 'structure' ? hit.ref.pos
+        : hit.ref.pos;
       const cx = pos.x * TILE;
       const cy = pos.y * TILE;
-      // Highlight ring
       ctx.strokeStyle = 'rgba(232, 217, 122, 0.9)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(cx, cy, 12, 0, Math.PI * 2);
       ctx.stroke();
-      // Tooltip
       drawTooltip(ctx, mouse.x + 12, mouse.y + 12, tooltipFor(hit, world), width, height);
     }
   }
+}
+
+function drawBolt(ctx: CanvasRenderingContext2D, x: number, y: number, world: World): void {
+  // Small ⚡ icon: yellow lightning bolt
+  const pulse = world && world.inventory.power / 800 < 0.3 ? 0.6 + 0.4 * Math.sin(world.tick * 0.25) : 1;
+  ctx.fillStyle = `rgba(232, 217, 122, ${pulse.toFixed(2)})`;
+  ctx.strokeStyle = '#0d1418';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 4);
+  ctx.lineTo(x - 2, y + 1);
+  ctx.lineTo(x, y + 1);
+  ctx.lineTo(x - 1, y + 5);
+  ctx.lineTo(x + 3, y);
+  ctx.lineTo(x + 1, y);
+  ctx.lineTo(x + 2, y - 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.lineWidth = 1;
+}
+
+function drawGear(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  // Small gear/circular-arrow: green, indicating self-sustaining
+  ctx.strokeStyle = '#5aa37a';
+  ctx.fillStyle = '#5aa37a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 3.2, -0.3 * Math.PI, 1.3 * Math.PI);
+  ctx.stroke();
+  // arrowhead
+  ctx.beginPath();
+  ctx.moveTo(x + 3.5, y - 1.5);
+  ctx.lineTo(x + 5, y);
+  ctx.lineTo(x + 2.5, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.lineWidth = 1;
 }
 
 function drawTooltip(
@@ -315,7 +417,6 @@ function drawTooltip(
   const lineH = 14;
   const w = Math.max(...lines.map(l => ctx.measureText(l).width)) + padX * 2;
   const h = lines.length * lineH + padY * 2;
-  // Keep on screen
   if (x + w > canvasW - 4) x = canvasW - w - 4;
   if (y + h > canvasH - 4) y = canvasH - h - 4;
   if (x < 4) x = 4;
@@ -330,24 +431,9 @@ function drawTooltip(
   ctx.fillStyle = '#cfd8d3';
   ctx.textBaseline = 'top';
   for (let i = 0; i < lines.length; i++) {
-    // Title (first line) in a brighter color
     ctx.fillStyle = i === 0 ? '#e8d97a' : '#cfd8d3';
     ctx.fillText(lines[i], x + padX, y + padY + i * lineH);
   }
-}
-
-export function hudText(world: World): string {
-  const gen = world.structures.find(s => s.kind === 'tidal_generator');
-  const brott = world.brotts[0];
-  const lines = [
-    `tick    ${world.tick}`,
-    `power   ${world.inventory.power.toFixed(0)} kWh`,
-    `salvage ${world.inventory.salvage ?? 0}`,
-    `debris  ${world.debris.length} on intake`,
-    gen ? `tidal-1 fouling ${(gen.fouling * 100).toFixed(0)}%  out ${(gen.outputBase * (1 - gen.fouling) * gen.health).toFixed(0)} kW` : '',
-    brott ? `${brott.name}  energy ${(brott.energy * 100).toFixed(0)}%  task ${brott.task.kind}` : '',
-  ];
-  return lines.filter(Boolean).join('\n');
 }
 
 function lerpColor(a: string, b: string, t: number): string {

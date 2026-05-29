@@ -1,8 +1,4 @@
 // Node entry. Runs sim with no rendering. Emits metrics JSON for the agent loop.
-//
-// Usage:
-//   npm run headless -- --seed 42 --ticks 10000 --json
-//   npm run headless -- --seed 42 --ticks 10000          # human-readable
 
 import { createWorld, run } from './sim/world';
 
@@ -10,12 +6,11 @@ interface Args {
   seed: number;
   ticks: number;
   json: boolean;
+  autoBuild: boolean;
 }
 
-interface Args2 extends Args { autoBuild: boolean; }
-
-function parseArgs(argv: string[]): Args2 {
-  const out: Args2 = { seed: 1, ticks: 10_000, json: false, autoBuild: false };
+function parseArgs(argv: string[]): Args {
+  const out: Args = { seed: 1, ticks: 50_000, json: false, autoBuild: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--seed') out.seed = parseInt(argv[++i], 10);
@@ -29,25 +24,26 @@ function parseArgs(argv: string[]): Args2 {
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   const configOverride = args.autoBuild
-    ? { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200 } }
+    ? { autoBuild: { enabled: true, brottPerGenTarget: 1.0, maxIdleRatio: 0.5, buildCooldownTicks: 200, rechargeStationRatio: 0.15 } }
     : undefined;
   const { world, rng, config } = createWorld({ seed: args.seed, config: configOverride });
   const t0 = Date.now();
   run(world, config, rng, args.ticks);
   const elapsedMs = Date.now() - t0;
 
-  const gen = world.structures.find(s => s.kind === 'tidal_generator')!;
   const summary = {
     seed: args.seed,
     ticks: args.ticks,
     elapsedMs,
     metrics: world.metrics,
+    gameOver: world.gameOver,
     finalState: {
       power: world.inventory.power,
       salvage: world.inventory.salvage,
-      debrisRemaining: world.debris.length,
-      generatorFouling: gen.fouling,
-      brottEnergy: world.brotts[0].energy,
+      brotts: world.brotts.length,
+      generators: world.structures.filter(s => s.kind === 'tidal_generator' || s.kind === 'wind_turbine').length,
+      stations: world.structures.filter(s => s.kind === 'recharge_station').length,
+      offline: world.structures.filter(s => !s.online).length,
     },
     config,
   };
@@ -60,15 +56,13 @@ function main(): void {
     console.log(`brott-island headless run`);
     console.log(`  seed:    ${args.seed}`);
     console.log(`  ticks:   ${args.ticks}  (${elapsedMs}ms)`);
+    console.log(`  survived: ${m.ticksSurvived} ticks${world.gameOver ? ' (GAME OVER)' : ''}`);
     console.log(`  power generated: ${m.totalPowerGenerated.toFixed(0)} kWh`);
-    console.log(`  power delivered: ${m.totalPowerDelivered.toFixed(0)} kWh`);
-    console.log(`  debris collected: ${m.debrisCollected}`);
-    console.log(`  ticks at full output: ${m.ticksAtFullOutput} (${(100 * m.ticksAtFullOutput / args.ticks).toFixed(1)}%)`);
-    console.log(`  final fouling: ${(f.generatorFouling * 100).toFixed(1)}%`);
-    console.log(`  final energy:  ${(f.brottEnergy * 100).toFixed(1)}%`);
-    console.log(`  salvage:       ${f.salvage}`);
-    console.log(`  debris on map: ${f.debrisRemaining}`);
-    console.log(`  brotts: ${world.brotts.length}, generators: ${world.structures.filter(s => s.kind === 'tidal_generator').length}`);
+    console.log(`  power consumed:  ${m.totalPowerConsumed.toFixed(0)} kWh`);
+    console.log(`  power wasted:    ${m.totalPowerWasted.toFixed(0)} kWh`);
+    console.log(`  blackouts: ${m.blackouts}  restarts: ${m.restarts}  deaths: ${m.deaths}`);
+    console.log(`  brotts: ${f.brotts}  generators: ${f.generators}  stations: ${f.stations}`);
+    console.log(`  battery: ${f.power?.toFixed(0)} kWh  salvage: ${f.salvage}`);
     if (args.autoBuild) console.log(`  auto-build: ON`);
   }
 }
