@@ -22,6 +22,25 @@ canvas.addEventListener('mousemove', e => {
 });
 canvas.addEventListener('mouseleave', () => { mouse.inside = false; });
 
+// Click → popover inspector
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const cx = (e.clientX - rect.left) * scaleX;
+  const cy = (e.clientY - rect.top) * scaleY;
+  dashboard.openPopoverAt(cx, cy, e.clientX, e.clientY);
+});
+
+// Click outside canvas / popover closes
+document.addEventListener('click', e => {
+  const t = e.target as HTMLElement;
+  if (!t) return;
+  if (t === canvas) return;
+  if (t.closest('#popover')) return;
+  dashboard.closePopover();
+});
+
 const TICKS_PER_FRAME = 1;
 
 function frame(): void {
